@@ -4,11 +4,13 @@ require('dotenv').config();
 
 const app = express();
 
-// `credentials: true` requires an explicit origin — it's invalid (and
-// silently ignored by browsers) when combined with a wildcard '*'.
-// FRONTEND_URL falls back to the local Vite dev server.
+const allowedOrigins = [
+  process.env.FRONTEND_URL,   // e.g. https://your-app.vercel.app
+  'http://localhost:5173',    // local dev
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: allowedOrigins,
   credentials: true,
 }));
 app.use(express.json());
@@ -19,8 +21,6 @@ app.use('/api/categories',   require('./routes/categories'));
 app.use('/api/ai',           require('./routes/ai'));
 app.use('/api/budgets',      require('./routes/budgets'));
 app.use('/api/agent',        require('./routes/agent'));
-app.use('/api/health',       require('./routes/health'));
-app.use('/api/alerts',       require('./routes/alerts'));
 
 app.get('/', (req, res) => res.send('API running ✅'));
 
