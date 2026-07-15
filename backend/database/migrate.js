@@ -1,14 +1,22 @@
 const db = require('../config/db');
 
+async function addColumnIfMissing(table, column, definition) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) as cnt FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [table, column]
+  );
+  if (rows[0].cnt === 0) {
+    await db.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 async function migrate() {
   console.log('Running migrations...');
   try {
-    await db.query(`
-      ALTER TABLE transactions
-        ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE,
-        ADD COLUMN IF NOT EXISTS receipt_url TEXT,
-        ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'INR'
-    `);
+    await addColumnIfMissing('transactions', 'is_recurring', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfMissing('transactions', 'receipt_url', 'TEXT');
+    await addColumnIfMissing('transactions', 'currency', "VARCHAR(10) DEFAULT 'INR'");
     console.log('✅ transactions table extended');
 
     await db.query(`
