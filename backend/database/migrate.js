@@ -1,22 +1,22 @@
 const db = require('../config/db');
 
-async function addColumnIfMissing(table, column, definition) {
-  const [rows] = await db.query(
-    `SELECT COUNT(*) as cnt FROM information_schema.columns
-     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
-    [table, column]
-  );
-  if (rows[0].cnt === 0) {
-    await db.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  }
-}
-
 async function migrate() {
   console.log('Running migrations...');
   try {
-    await addColumnIfMissing('transactions', 'is_recurring', 'BOOLEAN DEFAULT FALSE');
-    await addColumnIfMissing('transactions', 'receipt_url', 'TEXT');
-    await addColumnIfMissing('transactions', 'currency', "VARCHAR(10) DEFAULT 'INR'");
+    // MySQL 8 does not support "ADD COLUMN IF NOT EXISTS", so check manually
+    async function addColumn(table, column, definition) {
+      const [rows] = await db.query(
+        `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [table, column]
+      );
+      if (rows[0].c === 0) await db.query(`ALTER TABLE \`${table}\` ADD COLUMN ${column} ${definition}`);
+    }
+    await addColumn('transactions', 'is_recurring', 'BOOLEAN DEFAULT FALSE');
+    await addColumn('transactions', 'receipt_url', 'TEXT');
+    await addColumn('transactions', 'currency', "VARCHAR(10) DEFAULT 'INR'");
+    await addColumn('categories', 'color', "VARCHAR(20) DEFAULT '#6366f1'");
+    await addColumn('categories', 'icon', 'VARCHAR(10)');
     console.log('✅ transactions table extended');
 
     await db.query(`
@@ -109,6 +109,24 @@ async function migrate() {
       )
     `);
     console.log('✅ recurring_transactions table created');
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS savings_goals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        icon VARCHAR(10) DEFAULT '🎯',
+        target_amount DECIMAL(12,2) NOT NULL,
+        saved_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+        target_date DATE NULL,
+        completed_at DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('✅ savings_goals table created');
+    await addColumn('recurring_transactions', 'type', "VARCHAR(10) NOT NULL DEFAULT 'expense'");
+    await addColumn('recurring_transactions', 'anchor_day', 'INT');
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS agent_conversations (

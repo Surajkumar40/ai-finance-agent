@@ -6,8 +6,8 @@ import {
 } from "recharts";
 import Layout from "../components/Layout";
 import BudgetProgress from "../components/BudgetProgress";
-import HealthScoreCard from "../components/HealthScoreCard";
-import AlertsBanner from "../components/AlertsBanner";
+import SpendingInsights from "../components/SpendingInsights";
+import HealthScore from "../components/HealthScore";
 
 const COLORS = ["#7c5cfc","#10d9a0","#ffb547","#ff5e7d","#3b82f6","#f472b6","#34d399","#fb923c"];
 const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -117,8 +117,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <AlertsBanner />
-
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Net Balance" value={fmt(summary.balance)} sub="Total across all time"
@@ -189,15 +187,14 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Health Score + Budget Progress */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          <div className="lg:col-span-2">
-            <HealthScoreCard />
-          </div>
-          <div className="lg:col-span-3">
-            <BudgetProgress />
-          </div>
-        </div>
+        {/* Score out of 100 */}
+        <HealthScore />
+
+        {/* Month picker, daily trend, comparison with last month */}
+        <SpendingInsights />
+
+        {/* Budget Progress — NEW */}
+        <BudgetProgress />
 
         {/* Recent Transactions */}
         <div className="card p-5">

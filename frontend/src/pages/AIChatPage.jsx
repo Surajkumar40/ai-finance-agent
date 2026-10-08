@@ -9,30 +9,28 @@ const SUGGESTIONS = [
   "Am I saving enough?",
 ];
 
-const WELCOME = {
+const GREETING = {
   role: "assistant",
   text: "Hi! I'm your AI finance agent 👋 I can look up your real transactions, check your budgets, and even add entries or update budgets when you ask. What would you like to know?",
 };
 
 export default function AIChatPage() {
-  const [messages, setMessages] = useState([WELCOME]);
+  const [messages, setMessages] = useState([GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Load prior conversation history so refreshing doesn't lose context
+  // Load saved conversation
   useEffect(() => {
-    api.get("/agent/history").then(({ data }) => {
-      const history = data.history || [];
-      if (!history.length) return;
-      const restored = history.map(h => ({
-        role: h.role,
-        text: h.content,
-        toolCalls: h.tool_calls ? JSON.parse(h.tool_calls) : [],
-      }));
-      setMessages([WELCOME, ...restored]);
-    }).catch(() => {});
+    api.get("/agent/history")
+      .then(({ data }) => {
+        const list = Array.isArray(data) ? data : data.history ?? data.messages ?? [];
+        if (list.length) {
+          setMessages([GREETING, ...list.map(m => ({ role: m.role, text: m.text ?? m.content }))]);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -47,13 +45,20 @@ export default function AIChatPage() {
     setLoading(true);
     try {
       const { data } = await api.post("/agent/chat", { message: text });
-      setMessages(prev => [...prev, { role: "assistant", text: data.reply, toolCalls: data.toolCalls || [] }]);
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", text: "Sorry, something went wrong. Please try again." }]);
+      const reply = data.reply ?? data.response ?? data.message ?? data.text ?? "(empty reply)";
+      setMessages(prev => [...prev, { role: "assistant", text: reply }]);
+    } catch (err) {
+      const detail = err.response?.data?.error || err.response?.data?.message || err.message;
+      setMessages(prev => [...prev, { role: "assistant", text: "⚠️ " + detail }]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
     }
+  }
+
+  async function clearChat() {
+    try { await api.delete("/agent/history"); } catch { /* ignore */ }
+    setMessages([GREETING]);
   }
 
   const handleKey = (e) => {
@@ -81,6 +86,10 @@ export default function AIChatPage() {
                 <span className="text-xs text-slate-400 dark:text-slate-500">Online · Powered by Claude AI</span>
               </div>
             </div>
+            <button onClick={clearChat}
+              className="ml-auto text-xs px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-brand-400 hover:text-brand-500 transition-all">
+              Clear chat
+            </button>
           </div>
         </div>
 
@@ -104,16 +113,6 @@ export default function AIChatPage() {
                   : "bg-brand-500 text-white rounded-tr-sm"
               }`}>
                 {m.text}
-                {m.toolCalls?.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-slate-200 dark:border-white/10 flex flex-wrap gap-1.5">
-                    {m.toolCalls.map((tc, idx) => (
-                      <span key={idx} className="text-[10px] font-medium px-2 py-0.5 rounded-full
-                                                   bg-brand-500/10 text-brand-500 border border-brand-500/20">
-                        🔧 {tc.tool}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           ))}

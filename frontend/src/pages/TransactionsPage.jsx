@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import { downloadCSV } from "../utils/csv";
 
 const EMPTY_FORM = {
   title: "", amount: "", type: "expense",
@@ -15,6 +16,17 @@ const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
   focus:outline-none focus:border-brand-400 dark:focus:border-brand-500
   focus:ring-2 focus:ring-brand-400/20 transition-all`;
 
+// Shrinks a phone photo to <=1600px JPEG so uploads are small and fast
+async function fileToDataUrl(file, maxSide = 1600, quality = 0.82) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -25,6 +37,7 @@ export default function TransactionsPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [scanning, setScanning] = useState(false);
 
   const fetchAll = async () => {
     const [txRes, catRes] = await Promise.all([
@@ -61,6 +74,23 @@ export default function TransactionsPage() {
     fetchAll();
   };
 
+  const handleReceipt = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setScanning(true); setError("");
+    try {
+      const image = await fileToDataUrl(file);
+      const { data } = await api.post("/receipts/scan", { image });
+      setForm(f => ({
+        ...f, title: data.title, amount: data.amount, type: data.type, date: data.date,
+        category_id: data.category_id || f.category_id, note: f.note || "Scanned from receipt",
+      }));
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not read this image. Try a clear JPG or PNG photo.");
+    } finally { setScanning(false); }
+  };
+
   const handleSubmit = async () => {
     if (!form.title || !form.amount || !form.date) { setError("Title, amount and date are required."); return; }
     setLoading(true);
@@ -93,12 +123,20 @@ export default function TransactionsPage() {
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Transactions</h1>
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{transactions.length} total records</p>
           </div>
-          <button onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white
-                       bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all shadow-lg shadow-brand-500/25">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            Add Transaction
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => downloadCSV(filtered)} disabled={filtered.length === 0}
+              title="Download the transactions shown below as a spreadsheet file"
+              className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10
+                         text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-40 transition-all">
+              Export CSV
+            </button>
+            <button onClick={openAdd}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white
+                         bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all shadow-lg shadow-brand-500/25">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              Add Transaction
+            </button>
+          </div>
         </div>
 
         {/* Summary pills */}
@@ -259,6 +297,15 @@ export default function TransactionsPage() {
                 <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 text-red-500 dark:text-red-400 text-sm">
                   {error}
                 </div>
+              )}
+
+              {!editId && (
+                <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed text-sm font-medium cursor-pointer transition-all
+                  ${scanning ? "opacity-60 cursor-wait" : "hover:border-brand-400 hover:text-brand-500"}
+                  border-slate-300 dark:border-white/15 text-slate-500 dark:text-slate-400`}>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleReceipt} disabled={scanning} />
+                  {scanning ? "Reading receipt…" : "📷 Scan a receipt to auto-fill"}
+                </label>
               )}
 
               <div>

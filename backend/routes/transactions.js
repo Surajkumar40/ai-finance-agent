@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const db = require("../config/db");
-const { checkTransactionForAnomaly } = require("../services/anomalyDetection");
+const { checkBudgets } = require("../services/alerts");
 
 // GET all transactions for logged-in user
 router.get("/", auth, async (req, res) => {
@@ -48,12 +48,8 @@ router.post("/", auth, async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [req.user.id, title, amount, type, category_id || null, date, note || null]
     );
+    try { await checkBudgets(req.user.id); } catch (e) { console.error("Alert check failed:", e.message); }
     res.status(201).json({ id: result.insertId, message: "Transaction created" });
-
-    // Fire-and-forget: check for spending anomalies without delaying the response.
-    checkTransactionForAnomaly({
-      id: result.insertId, user_id: req.user.id, category_id, amount, type, date,
-    }).catch(err => console.error("Anomaly check failed:", err.message));
   } catch (err) {
     console.error("Transaction error:", err.message);
     res.status(500).json({ message: err.message });
@@ -75,6 +71,7 @@ router.put("/:id", auth, async (req, res) => {
        WHERE id = ? AND user_id = ?`,
       [title, amount, type, category_id || null, date, note || null, req.params.id, req.user.id]
     );
+    try { await checkBudgets(req.user.id); } catch (e) { console.error("Alert check failed:", e.message); }
     res.json({ message: "Transaction updated" });
   } catch (err) {
     console.error("Transaction error:", err.message);

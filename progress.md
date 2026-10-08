@@ -450,11 +450,10 @@ Not a finance tracker. An AI agent that watches your money, thinks ahead, warns 
 ---
 
 ## Current Status
-- Completed: Sessions 1–6 (basic Finance Tracker), Session 7 (DB schema v2 for agent architecture),
-  Session 8 (AI agent with tool_use + memory), Session 9 (Financial Health Score + Anomaly Detection)
-- Next up: Session 10 — cron-based proactive alerts (currently alerts only fire on transaction create)
+- Starting: Session 7 — Database upgrade for Agent architecture
+- Previous: Completed basic Finance Tracker (Sessions 1–6) — foundation reused
 - Total sessions planned: 20
 
 ## How To Start Next Session
 Upload this progress.md to Claude and say:
-"Session 10 ready — let's add scheduled/cron-based proactive alerts"
+"Session 7 ready — let's build the upgraded database schema for the AI Finance Agent"

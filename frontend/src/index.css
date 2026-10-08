@@ -30,3 +30,26 @@
     @apply bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 rounded-xl px-4 py-2 text-sm transition-all duration-150;
   }
 }
+
+/* Dropdown (<select>) options: the popup list ignores the select's own colours,
+   so give it explicit readable colours in light AND dark mode */
+@layer base {
+  select { color-scheme: light; }
+  .dark select { color-scheme: dark; }
+
+  select option,
+  select optgroup {
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+  .dark select option,
+  .dark select optgroup {
+    background-color: #16161f;
+    color: #f1f5f9;
+  }
+  select option:checked,
+  select option:hover {
+    background-color: #7c5cfc;
+    color: #ffffff;
+  }
+}

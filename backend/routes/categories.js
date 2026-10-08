@@ -3,13 +3,17 @@ const router = express.Router();
 const auth = require("../middleware/auth");
 const db = require("../config/db");
 
-// GET all categories
+// GET default categories + the logged-in user's own
 router.get("/", auth, async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT * FROM categories ORDER BY name ASC");
+    const [rows] = await db.query(
+      "SELECT * FROM categories WHERE user_id IS NULL OR user_id = ? ORDER BY name ASC",
+      [req.user.id]
+    );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Categories error:", err.message);
+    res.status(500).json({ message: err.message });
   }
 });
 
