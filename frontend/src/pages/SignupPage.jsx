@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
@@ -19,7 +19,7 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true); setError("");
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/register", form);
+      const res = await api.post("/auth/register", form);
       login(res.data.token, res.data.user);
       navigate("/dashboard");
     } catch (err) {
