@@ -164,4 +164,7 @@ router.post('/categorise', auth, async (req, res) => {
   }
 });
 
+// Let other routes (e.g. import.js) reuse the same AI call with Anthropic -> Groq fallback
+router.askAI = askAI;
+
 module.exports = router;

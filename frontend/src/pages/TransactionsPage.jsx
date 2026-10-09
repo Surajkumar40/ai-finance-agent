@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { downloadCSV } from "../utils/csv";
+import ImportCSV from "../components/ImportCSV";
 
 const EMPTY_FORM = {
   title: "", amount: "", type: "expense",
@@ -124,6 +125,7 @@ export default function TransactionsPage() {
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{transactions.length} total records</p>
           </div>
           <div className="flex gap-2">
+            <ImportCSV transactions={transactions} categories={categories} onDone={fetchAll} />
             <button onClick={() => downloadCSV(filtered)} disabled={filtered.length === 0}
               title="Download the transactions shown below as a spreadsheet file"
               className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10
