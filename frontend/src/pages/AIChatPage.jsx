@@ -1,20 +1,70 @@
 import { useState, useEffect, useRef } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import { useAuth } from "../context/AuthContext";
 
 const SUGGESTIONS = [
+  "Spent 450 on groceries yesterday",
   "How much did I spend this month?",
   "Where can I cut costs?",
-  "Summarise my top categories",
-  "Am I saving enough?",
+  "Set a 5000 food budget",
 ];
 
-const GREETING = {
-  role: "assistant",
-  text: "Hi! I'm your AI finance agent 👋 I can look up your real transactions, check your budgets, and even add entries or update budgets when you ask. What would you like to know?",
+const pad = n => String(n).padStart(2, "0");
+// The user's own calendar date (so "yesterday" is right whatever the server's timezone)
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+// **bold** only; everything else stays plain text (React escapes it, so this is safe)
+function RichText({ text }) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    /^\*\*[^*]+\*\*$/.test(part)
+      ? <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+      : <span key={i}>{part}</span>
+  );
+}
+
+// New replies appear in about 0.7 seconds, like someone typing. Old messages show instantly.
+function Typed({ text, animate, onGrow }) {
+  const [n, setN] = useState(animate ? 0 : text.length);
+
+  useEffect(() => {
+    if (!animate) return;
+    const total = text.length;
+    const step = Math.max(1, Math.ceil(total / 40));
+    const id = setInterval(() => {
+      setN(v => {
+        const next = Math.min(total, v + step);
+        if (next >= total) clearInterval(id);
+        return next;
+      });
+      onGrow?.();
+    }, 18);
+    return () => clearInterval(id);
+  }, [text, animate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // when a message stops animating (for example you sent another one), show it in full
+  const count = animate ? n : text.length;
+  let shown = text.slice(0, count);
+  if (count < text.length) {
+    // never show half of a **bold** marker while typing
+    if (shown.endsWith("*") && !shown.endsWith("**")) shown = shown.slice(0, -1);
+    if ((shown.match(/\*\*/g) || []).length % 2) {
+      shown = shown.endsWith("**") ? shown.slice(0, -2) : shown + "**";
+    }
+  }
+  return <RichText text={shown} />;
+}
+
 export default function AIChatPage() {
+  const { user } = useAuth();
+  const firstName = (user?.name || "").trim().split(/\s+/)[0];
+  const GREETING = {
+    role: "assistant",
+    text: `Hey${firstName ? " " + firstName : ""}! 👋 Ask me anything about your money, or just tell me what you spent and I'll log it. Like "spent 450 on groceries yesterday".`,
+  };
   const [messages, setMessages] = useState([GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,7 +77,9 @@ export default function AIChatPage() {
       .then(({ data }) => {
         const list = Array.isArray(data) ? data : data.history ?? data.messages ?? [];
         if (list.length) {
-          setMessages([GREETING, ...list.map(m => ({ role: m.role, text: m.text ?? m.content }))]);
+          const old = list.map(m => ({ role: m.role, text: m.text ?? m.content }));
+          // if you already started typing before history arrived, keep what is on screen
+          setMessages(prev => (prev.length > 1 ? prev : [prev[0], ...old]));
         }
       })
       .catch(() => {});
@@ -37,6 +89,8 @@ export default function AIChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const keepAtBottom = () => bottomRef.current?.scrollIntoView({ behavior: "auto" });
+
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
@@ -44,12 +98,13 @@ export default function AIChatPage() {
     setMessages(prev => [...prev, { role: "user", text }]);
     setLoading(true);
     try {
-      const { data } = await api.post("/agent/chat", { message: text });
-      const reply = data.reply ?? data.response ?? data.message ?? data.text ?? "(empty reply)";
-      setMessages(prev => [...prev, { role: "assistant", text: reply }]);
+      const { data } = await api.post("/agent/chat", { message: text, today: localToday() });
+      const reply = data.reply ?? data.response ?? data.message ?? data.text ?? "Hmm, I drew a blank there. Could you say that again?";
+      setMessages(prev => [...prev, { role: "assistant", text: reply, fresh: true }]);
     } catch (err) {
-      const detail = err.response?.data?.error || err.response?.data?.message || err.message;
-      setMessages(prev => [...prev, { role: "assistant", text: "⚠️ " + detail }]);
+      const detail = err.response?.data?.error || err.response?.data?.message
+        || "I couldn't reach the server. Check your connection and try again.";
+      setMessages(prev => [...prev, { role: "assistant", text: detail, fresh: true }]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -83,7 +138,7 @@ export default function AIChatPage() {
               <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">AI Finance Agent</h1>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-xs text-slate-400 dark:text-slate-500">Online · Powered by Claude AI</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">Online · works from your real transactions</span>
               </div>
             </div>
             <button onClick={clearChat}
@@ -107,12 +162,14 @@ export default function AIChatPage() {
                 {m.role === "assistant" ? "AI" : "U"}
               </div>
               {/* Bubble */}
-              <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+              <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
                 m.role === "assistant"
                   ? "bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-200 rounded-tl-sm"
                   : "bg-brand-500 text-white rounded-tr-sm"
               }`}>
-                {m.text}
+                {m.role === "assistant"
+                  ? <Typed text={m.text} animate={!!m.fresh && i === messages.length - 1} onGrow={keepAtBottom} />
+                  : m.text}
               </div>
             </div>
           ))}
@@ -162,7 +219,7 @@ export default function AIChatPage() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask about your finances… (Enter to send)"
+            placeholder="Ask me anything, or tell me what you spent… (Enter to send)"
             className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white
                        placeholder-slate-400 dark:placeholder-slate-600
                        resize-none focus:outline-none py-2 px-2 leading-relaxed"
