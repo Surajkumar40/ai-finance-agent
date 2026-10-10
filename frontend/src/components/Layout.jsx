@@ -45,6 +45,8 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
 
   const handleLogout = () => { logout(); navigate("/login"); };
+  const isDemo = (user?.email || "").endsWith("@demo.local");
+  const leaveDemo = () => { logout(); navigate("/signup"); };
   const initials = user?.name
     ? user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
     : "U";
@@ -73,7 +75,7 @@ export default function Layout({ children }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex flex-col gap-1 flex-1">
+        <nav className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
           <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-2 mb-1 mt-1">
             Main
           </p>
@@ -105,6 +107,16 @@ export default function Layout({ children }) {
 
         {/* Footer */}
         <div className="border-t border-slate-100 dark:border-white/5 pt-3 flex flex-col gap-2">
+          {isDemo && (
+            <div className="px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20
+                            text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+              <p className="font-semibold">Demo account</p>
+              <p className="mt-0.5 opacity-80">Sample data, deleted after a day.</p>
+              <button onClick={leaveDemo} className="mt-1.5 font-semibold underline hover:no-underline text-left">
+                Create your own account
+              </button>
+            </div>
+          )}
           {/* Theme toggle */}
           <button
             onClick={toggle}

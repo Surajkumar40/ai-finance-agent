@@ -4,6 +4,13 @@ import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
+const pad = n => String(n).padStart(2, "0");
+// the visitor's own calendar date, so the sample data lines up with "today" for them
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 export default function LoginPage() {
   const { login } = useAuth();
   const { dark, toggle } = useTheme();
@@ -12,6 +19,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -25,6 +33,17 @@ export default function LoginPage() {
     } catch (err) {
       setError(err.response?.data?.message || "Login failed");
     } finally { setLoading(false); }
+  };
+
+  const startDemo = async () => {
+    setDemoLoading(true); setError("");
+    try {
+      const res = await api.post("/demo", { today: localToday() });
+      login(res.data.token, res.data.user);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not start the demo. Please try again.");
+    } finally { setDemoLoading(false); }
   };
 
   return (
@@ -164,6 +183,26 @@ export default function LoginPage() {
               ) : "Sign in"}
             </button>
           </form>
+
+          <div className="flex items-center gap-3 my-5">
+            <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+            <span className="text-xs text-slate-400 dark:text-slate-500">or</span>
+            <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+          </div>
+
+          <button type="button" onClick={startDemo} disabled={demoLoading || loading}
+            className="w-full py-3 rounded-xl font-semibold text-sm
+                       border border-slate-200 dark:border-white/10
+                       text-slate-700 dark:text-slate-200
+                       hover:border-brand-400 hover:text-brand-500
+                       disabled:opacity-60 disabled:cursor-not-allowed transition-all">
+            {demoLoading ? "Setting up your demo…" : "✨ Try the demo, no sign-up needed"}
+          </button>
+          {demoLoading && (
+            <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-2">
+              The first visit can take up to a minute while the server wakes up.
+            </p>
+          )}
 
           <p className="text-center text-sm text-slate-400 dark:text-slate-500 mt-6">
             Don't have an account?{" "}
