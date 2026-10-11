@@ -47,6 +47,11 @@ const navItems = [
       <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/>
     </svg>
   )},
+  { to: "/profile",      label: "Profile",      icon: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>
+    </svg>
+  )},
 ];
 
 export default function Layout({ children }) {
