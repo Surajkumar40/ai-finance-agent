@@ -25,6 +25,11 @@ const navItems = [
       <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
     </svg>
   )},
+  { to: "/forecast",     label: "Forecast",     icon: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>
+    </svg>
+  )},
   { to: "/goals",        label: "Goals",        icon: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>
