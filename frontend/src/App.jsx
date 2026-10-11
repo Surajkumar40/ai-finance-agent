@@ -9,6 +9,7 @@ import RecurringPage from "./pages/RecurringPage";
 import GoalsPage from "./pages/GoalsPage";
 import BudgetsPage from "./pages/BudgetsPage";
 import ForecastPage from "./pages/ForecastPage";
+import ReportsPage from "./pages/ReportsPage";
 
 // function App() {
 //   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />  {/* ADD */}
           <Route path="/budgets" element={<ProtectedRoute><BudgetsPage /></ProtectedRoute>} />
           <Route path="/forecast" element={<ProtectedRoute><ForecastPage /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/recurring" element={<ProtectedRoute><RecurringPage /></ProtectedRoute>} />
           <Route path="/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
           <Route path="/ai" element={<ProtectedRoute><AIChatPage /></ProtectedRoute>} />

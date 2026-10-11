@@ -35,6 +35,11 @@ const navItems = [
       <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>
     </svg>
   )},
+  { to: "/reports",      label: "Reports",      icon: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6"/>
+    </svg>
+  )},
   { to: "/ai",           label: "AI Agent",     icon: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path d="M12 2a4 4 0 0 1 4 4v1h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v1a4 4 0 0 1-8 0v-1H7a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1V6a4 4 0 0 1 4-4z"/>
@@ -57,13 +62,13 @@ export default function Layout({ children }) {
     : "U";
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-[#0d0d14] transition-colors duration-300">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-[#0d0d14] transition-colors duration-300 print:bg-white">
 
       {/* Sidebar */}
       <aside className="w-[220px] fixed top-0 left-0 h-screen flex flex-col
                         bg-white dark:bg-[#11111a]
                         border-r border-slate-100 dark:border-white/5
-                        px-3 py-5 z-50">
+                        px-3 py-5 z-50 print:hidden">
 
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-2 pb-5 mb-2 border-b border-slate-100 dark:border-white/5">
@@ -167,7 +172,7 @@ export default function Layout({ children }) {
       </aside>
 
       {/* Main */}
-      <main className="ml-[220px] flex-1 p-8 animate-fade-in">
+      <main className="ml-[220px] flex-1 p-8 animate-fade-in print:ml-0 print:p-0">
         {children}
       </main>
     </div>
