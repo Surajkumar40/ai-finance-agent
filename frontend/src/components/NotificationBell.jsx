@@ -1,6 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 
+const pad = (n) => String(n).padStart(2, "0");
+// the visitor's own calendar date, so "due tomorrow" is right whatever the server's timezone
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+// left border colour per alert type
+const BORDER = {
+  budget_exceeded: "border-l-2 border-red-400",
+  budget_warning: "border-l-2 border-amber-400",
+  goal_completed: "border-l-2 border-emerald-400",
+  anomaly: "border-l-2 border-orange-400",
+  duplicate_charge: "border-l-2 border-orange-400",
+  bill_due: "border-l-2 border-sky-400",
+};
+
 const timeAgo = (iso) => {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 1) return "just now";
@@ -15,11 +31,11 @@ export default function NotificationBell() {
   const boxRef = useRef(null);
 
   const load = async () => {
-    try { const res = await api.get("/alerts"); setData(res.data); } catch { /* ignore */ }
+    try { const res = await api.get("/alerts", { params: { today: localToday() } }); setData(res.data); } catch { /* ignore */ }
   };
 
   useEffect(() => {
-    const tick = () => api.get("/alerts").then(res => setData(res.data)).catch(() => { /* ignore */ });
+    const tick = () => api.get("/alerts", { params: { today: localToday() } }).then(res => setData(res.data)).catch(() => { /* ignore */ });
     tick();
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);
@@ -76,7 +92,7 @@ export default function NotificationBell() {
             ) : data.alerts.map(a => (
               <button key={a.id} onClick={() => markRead(a)}
                 className={`w-full text-left flex gap-2.5 px-3 py-2.5 rounded-xl transition-colors hover:bg-slate-50 dark:hover:bg-white/5
-                  ${a.type === "budget_exceeded" ? "border-l-2 border-red-400" : a.type === "budget_warning" ? "border-l-2 border-amber-400" : a.type === "goal_completed" ? "border-l-2 border-emerald-400" : ""}`}>
+                  ${BORDER[a.type] || ""}`}>
                 <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${a.is_read ? "bg-transparent" : "bg-brand-500"}`} />
                 <span className="flex-1 min-w-0">
                   <span className={`block text-xs leading-relaxed ${a.is_read ? "text-slate-500 dark:text-slate-400" : "text-slate-800 dark:text-slate-100 font-medium"}`}>{a.message}</span>

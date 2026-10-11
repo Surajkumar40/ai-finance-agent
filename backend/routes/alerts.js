@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const db = require('../config/db');
-const { checkBudgets } = require('../services/alerts');
+const { checkBudgets, checkSpending, checkBills, userToday } = require('../services/alerts');
 
 const parse = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
 
@@ -12,10 +12,14 @@ const parse = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v; }
 const NOT_DISMISSED = "(metadata_json IS NULL OR JSON_EXTRACT(metadata_json, '$.dismissed') IS NULL)";
 const DISMISS = "metadata_json = JSON_SET(COALESCE(metadata_json, JSON_OBJECT()), '$.dismissed', TRUE), is_read = 1";
 
-// GET /api/alerts: latest alerts + unread count (also re-checks budgets)
+// GET /api/alerts?today=YYYY-MM-DD: latest alerts + unread count (also looks for new budget, spending and bill alerts)
 router.get('/', auth, async (req, res) => {
   try {
-    await checkBudgets(req.user.id);
+    // Each check is separate: if one fails, the bell still works with the others.
+    const today = userToday(req.query.today);
+    for (const run of [() => checkBudgets(req.user.id), () => checkSpending(req.user.id, today), () => checkBills(req.user.id, today)]) {
+      try { await run(); } catch (e) { console.error('ALERT CHECK FAILED:', e.message); }
+    }
     const [rows] = await db.query(
       `SELECT id, type, message, metadata_json, is_read, triggered_at FROM alerts
         WHERE user_id = ? AND ${NOT_DISMISSED} ORDER BY id DESC LIMIT 30`,
