@@ -19,7 +19,7 @@ const mailer = require('../services/mailer');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const isDemo = (email) => String(email || '').endsWith('@demo.local');
 const RESET_HOURS = 1;
-const RESET_MAX_PER_HOUR = 3;
+const RESET_MAX_PER_HOUR = 6;
 const DEMO_MSG = 'This is a demo account, so this is turned off. Create your own account to use it.';
 
 const validPassword = (p) => typeof p === 'string' && p.length >= 6 && p.length <= 100;
@@ -180,7 +180,14 @@ const GENERIC = { message: 'If that email belongs to an account, a reset link is
 
 function frontendUrl() {
   // Only from settings. Never from the request, or someone could make the email point to their own site.
-  return String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  let u = String(process.env.FRONTEND_URL || 'http://localhost:5173').trim().replace(/^["']|["']$/g, '').replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u; // forgot the https:// ? add it, or the link would not open
+  return u;
+}
+if (!process.env.FRONTEND_URL) {
+  console.warn('⚠️  FRONTEND_URL is not set. Reset links in emails will point to http://localhost:5173 and will NOT work for users. Set FRONTEND_URL=https://<your-vercel-site> on Render.');
+} else {
+  console.log(`🔗 Reset links will open: ${frontendUrl()}/reset-password?token=...`);
 }
 
 router.post('/forgot-password', async (req, res) => {
@@ -196,10 +203,10 @@ router.post('/forgot-password', async (req, res) => {
     if (!u || isDemo(u.email)) return;
     const [[{ n }]] = await db.query(
       'SELECT COUNT(*) AS n FROM password_resets WHERE user_id = ? AND created_at > NOW() - INTERVAL 1 HOUR', [u.id]);
-    if (Number(n) >= RESET_MAX_PER_HOUR) return; // stops anyone filling an inbox
+    if (Number(n) >= RESET_MAX_PER_HOUR) { console.warn(`FORGOT PASSWORD: limit of ${RESET_MAX_PER_HOUR} mails per hour reached for user ${u.id}, no mail sent. Try again in an hour.`); return; } // stops anyone filling an inbox
 
     const token = crypto.randomBytes(32).toString('hex');
-    await db.query('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [u.id]); // older links stop working
+    // older links stay valid until they are used or expire, so opening an earlier mail still works
     await db.query(
       `INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, NOW() + INTERVAL ${RESET_HOURS} HOUR)`,
       [u.id, sha256(token)]);
@@ -218,9 +225,22 @@ router.post('/forgot-password', async (req, res) => {
         <p style="font-size:13px;color:#64748b">Or copy this link into your browser:<br>${link}</p>
         <p style="font-size:13px;color:#64748b">If this was not you, ignore this email. Your password will stay the same.</p></div>`,
     });
+    console.log(`📧 Reset mail handed to the email service for ${u.email.replace(/^(.).*(@.*)$/, '$1***$2')}`);
   } catch (err) {
     console.error('FORGOT PASSWORD ERROR:', err.message);
   }
+});
+
+// Open https://<your-render-url>/api/account/email-status in a browser to see if email is set up. Shows no secrets.
+router.get('/email-status', (req, res) => {
+  const p = mailer.provider();
+  const url = frontendUrl();
+  const problems = [];
+  if (!p) problems.push(mailer.setupProblem());
+  if (!process.env.FRONTEND_URL) problems.push('FRONTEND_URL is not set, so links in the email point to localhost.');
+  else if (/localhost|127\.0\.0\.1/.test(url)) problems.push('FRONTEND_URL points to localhost. Set it to your Vercel site.');
+  res.json({ email: p ? `ON (${p})` : 'OFF', sender: p ? String(process.env.MAIL_FROM_EMAIL || process.env.MAIL_FROM || '').replace(/^(.{2}).*(@.*)$/, '$1***$2') : null,
+    links_open: `${url}/reset-password?token=...`, ok: problems.length === 0, problems });
 });
 
 async function findValidReset(token) {
