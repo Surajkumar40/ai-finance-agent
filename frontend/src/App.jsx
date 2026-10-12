@@ -11,7 +11,7 @@ import BudgetsPage from "./pages/BudgetsPage";
 import ForecastPage from "./pages/ForecastPage";
 import ReportsPage from "./pages/ReportsPage";
 import ProfilePage from "./pages/ProfilePage";
-import ForgotPasswordPage from "./pages/Forgotpasswordpage";
+import ForgotPasswordPage from "./pages/ForgotpasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 // function App() {
