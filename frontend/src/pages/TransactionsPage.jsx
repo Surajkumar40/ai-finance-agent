@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { downloadCSV } from "../utils/csv";
+import VoiceEntry from "../components/VoiceEntry";
 import ImportCSV from "../components/ImportCSV";
+import { localToday } from "../utils/voiceParse";
 
 const EMPTY_FORM = {
   title: "", amount: "", type: "expense",
-  category_id: "", date: new Date().toISOString().split("T")[0], note: "",
+  category_id: "", date: "", note: "",
 };
 
 const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
@@ -63,7 +65,7 @@ export default function TransactionsPage() {
     } catch { }
   }
 
-  const openAdd = () => { setForm(EMPTY_FORM); setEditId(null); setError(""); setShowModal(true); };
+  const openAdd = () => { setForm({ ...EMPTY_FORM, date: localToday() }); };
   const openEdit = (t) => {
     setForm({ title: t.title, amount: t.amount, type: t.type, category_id: t.category_id || "", date: t.date?.split("T")[0] || "", note: t.note || "" });
     setEditId(t.id); setError(""); setShowModal(true);
@@ -125,6 +127,7 @@ export default function TransactionsPage() {
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{transactions.length} total records</p>
           </div>
           <div className="flex gap-2">
+            <VoiceEntry categories={categories} onSaved={fetchAll} />
             <ImportCSV transactions={transactions} categories={categories} onDone={fetchAll} />
             <button onClick={() => downloadCSV(filtered)} disabled={filtered.length === 0}
               title="Download the transactions shown below as a spreadsheet file"
