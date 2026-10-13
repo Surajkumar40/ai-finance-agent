@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -35,6 +36,11 @@ const navItems = [
       <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>
     </svg>
   )},
+  { to: "/simulator",    label: "What-if",      icon: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>
+    </svg>
+  )},
   { to: "/reports",      label: "Reports",      icon: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6"/>
@@ -58,6 +64,7 @@ export default function Layout({ children }) {
   const { logout, user } = useAuth();
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false); // phone: the menu slides in over the page
 
   const handleLogout = () => { logout(); navigate("/login"); };
   const isDemo = (user?.email || "").endsWith("@demo.local");
@@ -70,10 +77,15 @@ export default function Layout({ children }) {
     <div className="flex min-h-screen bg-slate-50 dark:bg-[#0d0d14] transition-colors duration-300 print:bg-white">
 
       {/* Sidebar */}
-      <aside className="w-[220px] fixed top-0 left-0 h-screen flex flex-col
+      {/* Phone: dark layer behind the open menu. Tap it to close. */}
+      {menuOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden print:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+
+      <aside className={`w-[220px] fixed top-0 h-screen flex flex-col
                         bg-white dark:bg-[#11111a]
                         border-r border-slate-100 dark:border-white/5
-                        px-3 py-5 z-50 print:hidden">
+                        px-3 py-5 z-50 print:hidden transition-[left] duration-200
+                        ${menuOpen ? "left-0" : "-left-[220px] lg:left-0"}`}
+        onClick={(e) => { if (e.target.closest("a")) setMenuOpen(false); }}>
 
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-2 pb-5 mb-2 border-b border-slate-100 dark:border-white/5">
@@ -177,9 +189,21 @@ export default function Layout({ children }) {
       </aside>
 
       {/* Main */}
-      <main className="ml-[220px] flex-1 p-8 animate-fade-in print:ml-0 print:p-0">
-        {children}
-      </main>
+      <div className="flex-1 min-w-0 lg:ml-[220px] print:ml-0">
+        {/* Phone: top bar with the menu button */}
+        <header className="lg:hidden sticky top-0 z-30 h-14 flex items-center gap-3 px-4
+                           bg-white/90 dark:bg-[#11111a]/90 backdrop-blur
+                           border-b border-slate-100 dark:border-white/5 print:hidden">
+          <button onClick={() => setMenuOpen(true)} aria-label="Open menu"
+            className="w-9 h-9 -ml-1 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white tracking-tight">Finance<span className="text-brand-500">AI</span></span>
+        </header>
+        <main className="p-4 sm:p-6 lg:p-8 animate-fade-in print:p-0">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

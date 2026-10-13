@@ -10,6 +10,7 @@ import GoalsPage from "./pages/GoalsPage";
 import BudgetsPage from "./pages/BudgetsPage";
 import ForecastPage from "./pages/ForecastPage";
 import ReportsPage from "./pages/ReportsPage";
+import SimulatorPage from "./pages/SimulatorPage";
 import ProfilePage from "./pages/ProfilePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/budgets" element={<ProtectedRoute><BudgetsPage /></ProtectedRoute>} />
           <Route path="/forecast" element={<ProtectedRoute><ForecastPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/simulator" element={<ProtectedRoute><SimulatorPage /></ProtectedRoute>} />
           <Route path="/recurring" element={<ProtectedRoute><RecurringPage /></ProtectedRoute>} />
           <Route path="/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
