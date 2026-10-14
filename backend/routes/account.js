@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const auth = require('../middleware/auth');
 const mailer = require('../services/mailer');
+const household = require('../services/household');
 
 // /api/account/...
 //   GET    /me                      who am I
@@ -165,6 +166,8 @@ router.delete('/', auth, async (req, res) => {
       try { await conn.query(`DELETE FROM ${table} WHERE user_id = ?`, [uid]); }
       catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
     }
+    await household.ensureTables();
+    await household.removeUserFromHousehold(uid, conn); // hands the household on, or closes it if you were the last one
     await conn.query('DELETE FROM users WHERE id = ?', [uid]);
     await conn.commit();
     res.json({ message: 'Account deleted' });
@@ -213,7 +216,7 @@ router.post('/forgot-password', async (req, res) => {
 
     const link = `${frontendUrl()}/reset-password?token=${token}`;
     const first = String(u.name || '').trim().split(/\s+/)[0] || 'there';
-    await mailer.sendMail({
+    const sent = await mailer.sendMail({
       to: u.email,
       subject: 'Reset your Finance AI password',
       text: `Hi ${first},\n\nSomeone asked to reset the password for your Finance AI account. To choose a new password, open this link (it works for ${RESET_HOURS} hour):\n\n${link}\n\nIf this was not you, you can ignore this email. Your password will stay the same.\n`,
@@ -225,7 +228,7 @@ router.post('/forgot-password', async (req, res) => {
         <p style="font-size:13px;color:#64748b">Or copy this link into your browser:<br>${link}</p>
         <p style="font-size:13px;color:#64748b">If this was not you, ignore this email. Your password will stay the same.</p></div>`,
     });
-    console.log(`📧 Reset mail handed to the email service for ${u.email.replace(/^(.).*(@.*)$/, '$1***$2')}`);
+    console.log(`📧 Reset mail handed to the email service for ${u.email.replace(/^(.).*(@.*)$/, '$1***$2')}${sent?.messageId ? ' (id ' + sent.messageId + ')' : ''}`);
   } catch (err) {
     console.error('FORGOT PASSWORD ERROR:', err.message);
   }
@@ -241,6 +244,57 @@ router.get('/email-status', (req, res) => {
   else if (/localhost|127\.0\.0\.1/.test(url)) problems.push('FRONTEND_URL points to localhost. Set it to your Vercel site.');
   res.json({ email: p ? `ON (${p})` : 'OFF', sender: p ? String(process.env.MAIL_FROM_EMAIL || process.env.MAIL_FROM || '').replace(/^(.{2}).*(@.*)$/, '$1***$2') : null,
     links_open: `${url}/reset-password?token=...`, ok: problems.length === 0, problems });
+});
+
+// Sends a real test mail and then asks the email service what happened to it.
+// Off unless EMAIL_TEST_KEY is set on the server. Open in a browser:
+//   https://<your-render-url>/api/account/email-test?key=<EMAIL_TEST_KEY>&to=<an email you can open>
+// Remove EMAIL_TEST_KEY again once email works.
+let lastTest = 0;
+router.get('/email-test', async (req, res) => {
+  const secret = String(process.env.EMAIL_TEST_KEY || '');
+  if (!secret) return res.status(404).json({ message: 'Not found' });
+  const given = Buffer.from(String(req.query.key || ''));
+  const want = Buffer.from(secret);
+  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) return res.status(403).json({ message: 'Wrong key' });
+  const to = clean(req.query.to);
+  if (!EMAIL_RE.test(to)) return res.status(400).json({ message: 'Add &to=<an email address> to the link' });
+  if (!mailer.provider()) return res.status(400).json({ ok: false, problem: mailer.setupProblem() });
+  const waitMs = Number(process.env.EMAIL_TEST_MAX_MS) || 9000, pollMs = Number(process.env.EMAIL_TEST_POLL_MS) || 2000;
+  if (Date.now() - lastTest < Math.min(15000, waitMs + 1000)) return res.status(429).json({ message: 'One test at a time. Wait a few seconds and try again.' });
+  lastTest = Date.now();
+
+  const from = process.env.MAIL_FROM_EMAIL || process.env.MAIL_FROM || '';
+  const out = { to, from, provider: mailer.provider(), frontend_url: frontendUrl() };
+  try {
+    const sent = await mailer.sendMail({
+      to, subject: 'Finance AI test email',
+      text: 'This is a test email from your Finance AI server. If you can read this, email sending works.',
+      html: '<p>This is a test email from your <b>Finance AI</b> server. If you can read this, email sending works.</p>',
+    });
+    out.accepted_by_provider = true; out.messageId = sent.messageId || null;
+  } catch (err) {
+    out.accepted_by_provider = false; out.error = err.message;
+    out.verdict = { status: 'problem', text: 'The email service refused the request itself, so no mail was sent. The message in "error" says why (see its HINT).' };
+    return res.json(out);
+  }
+  if (out.provider !== 'brevo') { out.verdict = { status: 'pending', text: 'Accepted by the email service. Delivery lookup is only available for Brevo, so check your inbox and the service dashboard.' }; return res.json(out); }
+
+  // Brevo needs a few seconds to record what happened, so ask a few times.
+  const started = Date.now(); let events = [];
+  try {
+    while (Date.now() - started < waitMs) {
+      await new Promise((r) => setTimeout(r, pollMs));
+      const all = await mailer.brevoEvents(to);
+      events = all.filter((e) => out.messageId && e.messageId === out.messageId);
+      // if the ids are written differently by the service, fall back to whatever happened in the last few minutes
+      if (!events.length) events = all.filter((e) => Date.now() - Date.parse(e.date) < 5 * 60 * 1000);
+      if (events.some((e) => e.event !== 'requests')) break;
+    }
+  } catch (err) { out.lookup_error = err.message; }
+  out.events = events.map((e) => ({ event: e.event, reason: e.reason || undefined, at: e.date }));
+  out.verdict = mailer.verdict(events, from);
+  res.json(out);
 });
 
 async function findValidReset(token) {

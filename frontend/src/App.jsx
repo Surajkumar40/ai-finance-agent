@@ -11,6 +11,8 @@ import BudgetsPage from "./pages/BudgetsPage";
 import ForecastPage from "./pages/ForecastPage";
 import ReportsPage from "./pages/ReportsPage";
 import SimulatorPage from "./pages/SimulatorPage";
+import SharedPage from "./pages/SharedPage";
+import JoinPage from "./pages/JoinPage";
 import ProfilePage from "./pages/ProfilePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -32,12 +34,14 @@ export default function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/join" element={<JoinPage />} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />  {/* ADD */}
           <Route path="/budgets" element={<ProtectedRoute><BudgetsPage /></ProtectedRoute>} />
           <Route path="/forecast" element={<ProtectedRoute><ForecastPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/simulator" element={<ProtectedRoute><SimulatorPage /></ProtectedRoute>} />
+          <Route path="/shared" element={<ProtectedRoute><SharedPage /></ProtectedRoute>} />
           <Route path="/recurring" element={<ProtectedRoute><RecurringPage /></ProtectedRoute>} />
           <Route path="/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

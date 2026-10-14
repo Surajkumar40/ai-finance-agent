@@ -5,7 +5,7 @@ const currentMonth = () => new Date().toISOString().slice(0, 7); // same convent
 
 // Creates "budget_warning" (>=80%) and "budget_exceeded" (>=100%) alerts.
 // Each level is created only ONCE per category per month.
-async function checkBudgets(userId) {
+async function checkPersonalBudgets(userId) {
   const month = currentMonth();
   const [rows] = await db.query(
     `SELECT b.category_id, b.monthly_limit, c.name AS category_name,
@@ -134,6 +134,18 @@ function findDuplicates(expenses, today) {
 }
 
 const SEEN_TYPES = ['anomaly', 'duplicate_charge', 'bill_due'];
+// Personal budgets, then the shared household budgets (a failure in one never blocks the other).
+async function checkBudgets(userId) {
+  const created = await checkPersonalBudgets(userId);
+  try {
+    const shared = await require('./household').checkHouseholdBudgets(userId);
+    return created.concat(shared);
+  } catch (e) {
+    console.error('Shared budget check failed:', e.message);
+    return created;
+  }
+}
+
 async function seenKeys(userId) {
   const [rows] = await db.query(
     `SELECT metadata_json FROM alerts WHERE user_id = ? AND type IN (${SEEN_TYPES.map(() => '?').join(',')})
