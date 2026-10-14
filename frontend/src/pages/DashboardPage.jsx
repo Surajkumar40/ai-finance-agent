@@ -46,8 +46,6 @@ export default function DashboardPage() {
   const [recentTxns, setRecentTxns] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchAll(); }, []);
-
   async function fetchAll() {
     try {
       const { data } = await api.get("/transactions");
@@ -83,6 +81,9 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { fetchAll(); }, []);
 
   if (loading) return (
     <Layout>

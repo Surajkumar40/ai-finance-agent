@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { downloadCSV } from "../utils/csv";
-import VoiceEntry from "../components/VoiceEntry";
 import ImportCSV from "../components/ImportCSV";
+import VoiceEntry from "../components/VoiceEntry";
 import { localToday } from "../utils/voiceParse";
 
 const EMPTY_FORM = {
@@ -51,6 +51,7 @@ export default function TransactionsPage() {
     setCategories(catRes.data);
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchAll(); }, []);
 
   async function autoCategory(desc) {
@@ -62,10 +63,10 @@ export default function TransactionsPage() {
       });
       const matched = categories.find(c => c.name.toLowerCase() === data.category?.toLowerCase());
       if (matched) setForm(f => ({ ...f, category_id: matched.id }));
-    } catch { }
+    } catch { /* auto-category is a nicety; ignore failures */ }
   }
 
-  const openAdd = () => { setForm({ ...EMPTY_FORM, date: localToday() }); };
+  const openAdd = () => { setForm({ ...EMPTY_FORM, date: localToday() }); setEditId(null); setError(""); setShowModal(true); };
   const openEdit = (t) => {
     setForm({ title: t.title, amount: t.amount, type: t.type, category_id: t.category_id || "", date: t.date?.split("T")[0] || "", note: t.note || "" });
     setEditId(t.id); setError(""); setShowModal(true);
@@ -126,7 +127,7 @@ export default function TransactionsPage() {
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Transactions</h1>
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{transactions.length} total records</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <VoiceEntry categories={categories} onSaved={fetchAll} />
             <ImportCSV transactions={transactions} categories={categories} onDone={fetchAll} />
             <button onClick={() => downloadCSV(filtered)} disabled={filtered.length === 0}

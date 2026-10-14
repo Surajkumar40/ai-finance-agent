@@ -70,6 +70,8 @@ export default function BudgetsPage() {
     }
   }, [month]);
 
+  // Loading data when the page opens or the month changes is exactly what an effect is for.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   const goToMonth = delta => { setLoaded(false); setNotice(""); setMonth(m => shiftMonth(m, delta)); };
