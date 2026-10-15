@@ -1,34 +1,39 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
+// The sign-in and sign-up pages load with the app. Every other page is fetched the first time it is opened,
+// so the first screen is small and fast (important on phones).
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
-import DashboardPage from "./pages/DashboardPage";
-import TransactionsPage from "./pages/TransactionsPage";   // ADD
-import AIChatPage from "./pages/AIChatPage";
-import RecurringPage from "./pages/RecurringPage";
-import GoalsPage from "./pages/GoalsPage";
-import BudgetsPage from "./pages/BudgetsPage";
-import ForecastPage from "./pages/ForecastPage";
-import ReportsPage from "./pages/ReportsPage";
-import SimulatorPage from "./pages/SimulatorPage";
-import SharedPage from "./pages/SharedPage";
-import JoinPage from "./pages/JoinPage";
-import ProfilePage from "./pages/ProfilePage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
 
-// function App() {
-//   return (
-//     <div className="min-h-screen bg-gray-950 text-white">
-//       <Navbar />
-//     </div>
-//   )
-// }
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
+const AIChatPage = lazy(() => import("./pages/AIChatPage"));
+const RecurringPage = lazy(() => import("./pages/RecurringPage"));
+const GoalsPage = lazy(() => import("./pages/GoalsPage"));
+const BudgetsPage = lazy(() => import("./pages/BudgetsPage"));
+const ForecastPage = lazy(() => import("./pages/ForecastPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const SimulatorPage = lazy(() => import("./pages/SimulatorPage"));
+const SharedPage = lazy(() => import("./pages/SharedPage"));
+const JoinPage = lazy(() => import("./pages/JoinPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 
+function Loading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0f0f17]" role="status" aria-live="polite">
+      <div className="w-8 h-8 rounded-full border-2 border-slate-300 dark:border-white/20 border-t-brand-500 animate-spin" aria-hidden />
+      <span className="sr-only">Loading…</span>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
@@ -36,7 +41,7 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/join" element={<JoinPage />} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />  {/* ADD */}
+          <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
           <Route path="/budgets" element={<ProtectedRoute><BudgetsPage /></ProtectedRoute>} />
           <Route path="/forecast" element={<ProtectedRoute><ForecastPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
@@ -48,7 +53,7 @@ export default function App() {
           <Route path="/ai" element={<ProtectedRoute><AIChatPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
-// export default App
