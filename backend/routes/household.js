@@ -11,6 +11,8 @@
 //   POST   /invites/:id/decline    decline it
 //   GET    /invite-info?token=     who invited me (for the link page)
 //   POST   /join                   accept through the link        { token }
+//   PATCH  /me/sharing             choose whether my transactions are visible to the household { share: true|false }
+//   GET    /activity?month=        transactions of members who chose to share (never notes)
 //   GET    /budgets?month=YYYY-MM  shared budgets with spending, and each member's share (totals only)
 //   POST   /budgets                set a shared limit            { category_id, monthly_limit, month? }
 //   POST   /budgets/copy           copy limits to another month  { from, to }
@@ -66,13 +68,13 @@ router.get('/', async (req, res) => {
         WHERE LOWER(i.email) = LOWER(?) AND i.${PENDING} ORDER BY i.id DESC`, [req.me.email]);
     if (!mem) return res.json({ household: null, my_invites: mine, max_members: hh.MAX_MEMBERS });
     const [members] = await db.query(
-      `SELECT u.id AS user_id, u.name, u.email, m.role, m.joined_at
+      `SELECT u.id AS user_id, u.name, u.email, m.role, m.joined_at, m.share_transactions
          FROM household_members m JOIN users u ON u.id = m.user_id
         WHERE m.household_id = ? ORDER BY m.joined_at, m.id`, [mem.household_id]);
     const [invites] = await db.query(
       `SELECT id, email, created_at, expires_at FROM household_invites WHERE household_id = ? AND ${PENDING} ORDER BY id DESC`, [mem.household_id]);
     res.json({
-      household: { id: mem.household_id, name: mem.name, role: mem.role, members: members.map((m) => ({ ...m, is_me: m.user_id === req.me.id })), invites },
+      household: { id: mem.household_id, name: mem.name, role: mem.role, members: members.map((m) => ({ ...m, share_transactions: !!m.share_transactions, is_me: m.user_id === req.me.id })), invites },
       my_invites: mine, max_members: hh.MAX_MEMBERS,
     });
   } catch (err) { fail(res, err, 'OVERVIEW'); }
@@ -263,6 +265,37 @@ router.post('/join', (req, res) => {
   const token = req.body?.token;
   if (!validToken(token)) return res.status(404).json({ message: 'This invite was not found.' });
   return acceptInvite(req, res, 'i.token_hash = ?', [sha256(token)]);
+});
+
+// ───────── sharing my transactions (opt-in, off by default) ─────────
+router.patch('/me/sharing', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    if (typeof req.body?.share !== 'boolean') return res.status(400).json({ message: 'Choose on or off.' });
+    await db.query('UPDATE household_members SET share_transactions = ? WHERE user_id = ?', [req.body.share ? 1 : 0, req.me.id]);
+    res.json({ share: req.body.share, message: req.body.share ? 'Your transactions are now visible to the household' : 'Your transactions are private again' });
+  } catch (err) { fail(res, err, 'SHARING'); }
+});
+
+// Only people who switched sharing on appear here. Notes are never included.
+router.get('/activity', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const start = monthStart(req.query.month);
+    if (!start) return res.status(400).json({ message: 'Month must look like 2026-10.' });
+    const [rows] = await db.query(
+      `SELECT t.id, t.title, t.amount, t.type, DATE_FORMAT(t.date, '%Y-%m-%d') AS date,
+              c.name AS category_name, c.icon, u.id AS user_id, u.name AS member_name
+         FROM transactions t
+         JOIN household_members m ON m.user_id = t.user_id AND m.household_id = ? AND m.share_transactions = 1
+         JOIN users u ON u.id = t.user_id
+         LEFT JOIN categories c ON c.id = t.category_id
+        WHERE DATE_FORMAT(t.date, '%Y-%m-01') = ?
+        ORDER BY t.date DESC, t.id DESC LIMIT 200`, [mem.household_id, start]);
+    const [sharing] = await db.query(
+      'SELECT u.id AS user_id, u.name FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ? AND m.share_transactions = 1', [mem.household_id]);
+    res.json({ month: start.slice(0, 7), sharing_members: sharing, transactions: rows.map((r) => ({ ...r, amount: Number(r.amount), is_me: r.user_id === req.me.id })) });
+  } catch (err) { fail(res, err, 'ACTIVITY'); }
 });
 
 // ───────── shared budgets ─────────

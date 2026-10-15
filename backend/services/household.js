@@ -1,7 +1,7 @@
 // Shared budgets ("households"): a few people (a couple, a family, flatmates) who track budgets together.
 // Rules in one place:
 //  - one person belongs to at most one household
-//  - members see each other's TOTALS per category, never single transactions
+//  - members see each other's TOTALS per category; single transactions only from people who chose to share them (off by default)
 //  - shared budgets use the standard categories only (everyone has those, custom ones are private)
 //  - the tables are created the first time they are needed, so no migration is required
 const db = require('../config/db');
@@ -26,6 +26,7 @@ function ensureTables() {
           household_id INT NOT NULL,
           user_id INT NOT NULL,
           role ENUM('owner','member') NOT NULL DEFAULT 'member',
+          share_transactions TINYINT(1) NOT NULL DEFAULT 0,
           joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY one_household_per_user (user_id),
           FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE,
@@ -61,6 +62,10 @@ function ensureTables() {
           FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
           FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         )`);
+      // households created before this setting existed get the column added (default: not shared)
+      const [col] = await db.query(
+        `SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'household_members' AND COLUMN_NAME = 'share_transactions'`);
+      if (!col.length) await db.query('ALTER TABLE household_members ADD COLUMN share_transactions TINYINT(1) NOT NULL DEFAULT 0');
     })().catch((e) => { ready = null; throw e; }); // try again next time if it failed
   }
   return ready;

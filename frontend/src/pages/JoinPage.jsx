@@ -81,7 +81,7 @@ export default function JoinPage() {
   }
 
   return (
-    <AuthCard title={`Join ${info.household_name}`} subtitle={`${info.invited_by_name} invited you to track budgets together. You will only see each other's totals per category, never single transactions.`}>
+    <AuthCard title={`Join ${info.household_name}`} subtitle={`${info.invited_by_name} invited you to track budgets together. You will see each other's totals per category. Single transactions are only visible from people who choose to share them.`}>
       {error && <ErrorBox>{error}</ErrorBox>}
       {!info.email_matches ? (
         <>

@@ -52,6 +52,7 @@ const barColor = (p) => (p >= 100 ? "bg-rose-500" : p >= 80 ? "bg-amber-400" : "
 export default function SharedPage() {
   const [ov, setOv] = useState({ status: "loading" });
   const [bud, setBud] = useState(null);
+  const [act, setAct] = useState(null);
   const [cats, setCats] = useState([]);
   const [month, setMonth] = useState(() => localToday().slice(0, 7));
   const [reload, setReload] = useState(0);
@@ -89,6 +90,15 @@ export default function SharedPage() {
 
   useEffect(() => {
     let off = false;
+    if (!inHousehold) return undefined;
+    api.get("/household/activity", { params: { month } })
+      .then((r) => { if (!off) setAct(r.data); })
+      .catch(() => { if (!off) setAct({ transactions: [], sharing_members: [], failed: true }); });
+    return () => { off = true; };
+  }, [inHousehold, month, ov]);
+
+  useEffect(() => {
+    let off = false;
     api.get("/categories").then((r) => { if (!off) setCats(r.data.filter((c) => !c.user_id)); }).catch(() => {});
     return () => { off = true; };
   }, []);
@@ -115,10 +125,12 @@ export default function SharedPage() {
     run(() => api.post("/household/budgets", { category_id: Number(newCat), monthly_limit: Number(newLimit), month }), "Shared budget saved")
       .then((r) => { if (r) { setNewCat(""); setNewLimit(""); } });
   };
+  const setSharing = (share) => run(() => api.patch("/household/me/sharing", { share }), (r) => r.data.message);
   const rename = (e) => { e.preventDefault(); run(() => api.patch("/household", { name: nameDraft }), "Renamed").then((r) => { if (r) setRenaming(false); }); };
 
   const h = ov.status === "ready" ? ov.data.household : null;
   const isOwner = h?.role === "owner";
+  const meSharing = !!h?.members.find((m) => m.is_me)?.share_transactions;
   const thisMonth = localToday().slice(0, 7);
 
   return (
@@ -126,7 +138,7 @@ export default function SharedPage() {
       <div className="max-w-5xl mx-auto space-y-5">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Shared budgets</h1>
-          <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">Track budgets together with your partner, family or flatmates. You only see each other's totals per category, never single transactions.</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">Track budgets together with your partner, family or flatmates. You see each other's totals per category. Single transactions are visible only from people who choose to share them.</p>
         </div>
 
         <div role="status" aria-live="polite">
@@ -219,6 +231,7 @@ export default function SharedPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{m.name}{m.is_me && <span className="text-slate-400 font-normal"> (you)</span>}</p>
                       <p className="text-xs text-slate-400 truncate">{m.email}</p>
+                      {m.share_transactions && <p className="text-[11px] text-emerald-600 dark:text-emerald-400">Shares their transactions</p>}
                     </div>
                     {m.role === "owner" && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">Owner</span>}
                     {isOwner && !m.is_me && <ConfirmButton label="Remove" confirmLabel="Yes, remove" disabled={busy}
@@ -236,6 +249,21 @@ export default function SharedPage() {
                   </li>
                 ))}
               </ul>
+
+              <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5" aria-label="My sharing">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Share my transactions</p>
+                {meSharing ? (
+                  <>
+                    <p className="text-xs text-slate-400 mt-0.5 mb-2">Everyone in this household can see the title, amount, category and date of your transactions (never your notes). You can stop at any time and they disappear from view straight away.</p>
+                    <button className={ghost} disabled={busy} onClick={() => setSharing(false)}>Stop sharing</button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-400 mt-0.5 mb-2">Off by default. Right now the household only sees your totals per category. If you switch this on, everyone here can also see the title, amount, category and date of all your transactions, including older ones. Notes stay private.</p>
+                    <ConfirmButton label="Share my transactions" confirmLabel="Yes, share" danger={false} disabled={busy} onConfirm={() => setSharing(true)} />
+                  </>
+                )}
+              </div>
 
               <form onSubmit={invite} className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5">
                 <label htmlFor="invite" className="block text-sm font-medium text-slate-800 dark:text-slate-100">Invite someone</label>
@@ -330,6 +358,39 @@ export default function SharedPage() {
                   <button className="btn-primary" disabled={busy || !newCat || !(Number(newLimit) > 0)}>Save</button>
                 </div>
               </form>
+            </div>
+
+            <div className={`${card} p-4 sm:p-5`} aria-label="Household activity">
+              <h2 className="font-semibold text-slate-900 dark:text-white">Household activity</h2>
+              <p className="text-xs text-slate-400 mt-0.5 mb-3">Transactions in {monthLabel(month)} from people who chose to share them.</p>
+              {!act && <p className="text-sm text-slate-400">Loading…</p>}
+              {act?.failed && <p className="text-sm text-rose-500">Could not load the activity. Please try again.</p>}
+              {act && !act.failed && act.sharing_members.length === 0 && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">Nobody is sharing their transactions yet. Each person decides for themselves with “Share my transactions” above.</p>
+              )}
+              {act && !act.failed && act.sharing_members.length > 0 && (
+                <>
+                  <p className="text-xs text-slate-400 mb-2">Sharing: {act.sharing_members.map((m) => m.name).join(", ")}</p>
+                  {act.transactions.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No shared transactions in this month.</p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100 dark:divide-white/5" aria-label="Shared transactions">
+                      {act.transactions.map((t) => (
+                        <li key={t.id} className="flex items-center gap-3 py-2.5">
+                          <span className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-sm flex items-center justify-center shrink-0" aria-hidden>{t.icon || "💰"}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{t.title}</p>
+                            <p className="text-xs text-slate-400 truncate">{t.is_me ? "You" : t.member_name} · {t.category_name || "Uncategorised"} · {t.date}</p>
+                          </div>
+                          <span className={`text-sm font-semibold tabular-nums ${t.type === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-slate-800 dark:text-slate-100"}`}>
+                            {t.type === "income" ? "+" : "−"}{inr(t.amount)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
             </div>
           </>
         )}
