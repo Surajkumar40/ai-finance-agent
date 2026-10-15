@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/db');
 
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
+
 // ───────────────────────────────
 // POST /api/auth/register
 // ───────────────────────────────
@@ -12,9 +14,9 @@ const db = require('../config/db');
 router.post(
   '/register',
   [
-    body('name').trim().notEmpty().withMessage('Name is required'),
-    body('email').isEmail().withMessage('Valid email is required'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name is too long'),
+    body('email').isEmail().withMessage('Valid email is required').isLength({ max: 100 }).withMessage('Email is too long'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters').isLength({ max: 100 }).withMessage('Password must be at most 100 characters'),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -67,7 +69,7 @@ router.post(
   '/login',
   [
     body('email').isEmail().withMessage('Valid email is required'),
-    body('password').notEmpty().withMessage('Password is required'),
+    body('password').notEmpty().withMessage('Password is required').isLength({ max: 100 }).withMessage('Invalid email or password'),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -81,6 +83,7 @@ router.post(
       // Find user
       const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
       if (rows.length === 0) {
+        await bcrypt.compare(password, DUMMY_HASH); // same time as a real check, so response speed does not reveal which emails exist
         return res.status(401).json({ message: 'Invalid email or password' });
       }
 

@@ -32,3 +32,7 @@ if (missing.length) {
     `Open ${file} and add them (see .env.example). Save the file, then start again.`,
   ]);
 }
+
+if (String(process.env.JWT_SECRET).length < 32) {
+  console.warn('⚠️  JWT_SECRET is short (' + String(process.env.JWT_SECRET).length + ' characters). Use a long random one (64+ characters) so sign-in tokens cannot be guessed.');
+}

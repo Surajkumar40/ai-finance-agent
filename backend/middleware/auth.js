@@ -9,7 +9,7 @@ module.exports = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     req.user = { ...decoded, id: decoded.userId ?? decoded.id };  // ✅ normalize id
     next();
   } catch (err) {

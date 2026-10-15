@@ -37,6 +37,15 @@ function validate(b, partial = false) {
   return { data: out };
 }
 
+// the category must be a standard one or one of this person's own
+async function categoryAllowed(categoryId, userId) {
+  if (categoryId === null || categoryId === undefined) return true;
+  const id = Number(categoryId);
+  if (!Number.isInteger(id) || id <= 0) return false;
+  const [ok] = await db.query('SELECT id FROM categories WHERE id = ? AND (user_id IS NULL OR user_id = ?)', [id, userId]);
+  return ok.length > 0;
+}
+
 // GET /api/recurring
 router.get('/', auth, async (req, res) => {
   try {
@@ -57,6 +66,7 @@ router.post('/', auth, async (req, res) => {
   if (v.error) return res.status(400).json({ message: v.error });
   const d = v.data;
   try {
+    if (!(await categoryAllowed(d.category_id, req.user.id))) return res.status(400).json({ message: 'Choose a valid category' });
     const [r] = await db.query(
       `INSERT INTO recurring_transactions (user_id, title, amount, type, category_id, frequency, next_due, anchor_day, notes)
        VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -76,6 +86,7 @@ router.put('/:id', auth, async (req, res) => {
   const keys = Object.keys(v.data);
   if (!keys.length) return res.status(400).json({ message: 'Nothing to update' });
   try {
+    if ('category_id' in v.data && !(await categoryAllowed(v.data.category_id, req.user.id))) return res.status(400).json({ message: 'Choose a valid category' });
     const [r] = await db.query(
       `UPDATE recurring_transactions SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ? AND user_id = ?`,
       [...keys.map((k) => v.data[k]), req.params.id, req.user.id]);
