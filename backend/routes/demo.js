@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const { signToken } = require('../services/session');
 const db = require('../config/db');
 const { checkBudgets } = require('../services/alerts');
 
@@ -222,7 +222,7 @@ router.post('/', async (req, res) => {
     // Creates the "budget exceeded" notifications a real account would have. Not essential.
     try { await checkBudgets(userId); } catch (e) { console.warn('Demo alert check skipped:', e.message); }
 
-    const token = jwt.sign({ userId, email }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    const token = await signToken(userId, email, '1d');
     res.status(201).json({ token, user: { id: userId, name: DEMO_NAME, email } });
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch { /* ignore */ } }

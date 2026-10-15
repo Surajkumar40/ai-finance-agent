@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const { signToken } = require('../services/session');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/db');
 
@@ -16,7 +16,7 @@ router.post(
   [
     body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name is too long'),
     body('email').isEmail().withMessage('Valid email is required').isLength({ max: 100 }).withMessage('Email is too long'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters').isLength({ max: 100 }).withMessage('Password must be at most 100 characters'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters').isLength({ max: 100 }).withMessage('Password must be at most 100 characters'),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -44,11 +44,7 @@ router.post(
       );
 
       // Generate JWT
-      const token = jwt.sign(
-        { userId: result.insertId, email },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
+      const token = await signToken(result.insertId, email);
 
       res.status(201).json({
         message: 'User registered successfully',
@@ -96,11 +92,7 @@ router.post(
       }
 
       // Generate JWT
-      const token = jwt.sign(
-        { userId: user.id, email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
+      const token = await signToken(user.id, user.email);
 
       res.json({
         message: 'Login successful',

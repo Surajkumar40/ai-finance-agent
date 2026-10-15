@@ -126,7 +126,7 @@ export default function SignupPage() {
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
               <div className="relative">
                 <input type={showPass ? "text" : "password"} name="password" value={form.password}
-                  onChange={handleChange} placeholder="Min 6 characters" required minLength={6}
+                  onChange={handleChange} placeholder="Min 8 characters" required minLength={8}
                   className={inputClass + " pr-11"} />
                 <button type="button" onClick={() => setShowPass(!showPass)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">

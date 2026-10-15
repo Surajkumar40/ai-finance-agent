@@ -28,7 +28,7 @@ export default function ResetPasswordPage() {
   const submit = async (e) => {
     e.preventDefault();
     setError("");
-    if (password.length < 6) return setError("Password must be at least 6 characters.");
+    if (password.length < 8) return setError("Password must be at least 8 characters.");
     if (password !== confirm) return setError("The two passwords do not match.");
     setLoading(true);
     try {
@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
         <div>
           <label className={labelClass} htmlFor="rp-new">New password</label>
           <input id="rp-new" type={show ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="At least 6 characters" required autoFocus className={inputClass} />
+            placeholder="At least 8 characters" required autoFocus className={inputClass} />
         </div>
         <div>
           <label className={labelClass} htmlFor="rp-confirm">Type it again</label>

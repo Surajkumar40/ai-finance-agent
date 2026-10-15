@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const session = require('../services/session');
 const auth = require('../middleware/auth');
 const mailer = require('../services/mailer');
 const household = require('../services/household');
@@ -23,7 +24,7 @@ const RESET_HOURS = 1;
 const RESET_MAX_PER_HOUR = 6;
 const DEMO_MSG = 'This is a demo account, so this is turned off. Create your own account to use it.';
 
-const validPassword = (p) => typeof p === 'string' && p.length >= 6 && p.length <= 100;
+const validPassword = (p) => typeof p === 'string' && p.length >= 8 && p.length <= 100;
 const clean = (s) => (typeof s === 'string' ? s.trim() : '');
 
 async function getUser(id) {
@@ -93,10 +94,11 @@ router.put('/password', auth, async (req, res) => {
     if (typeof currentPassword !== 'string' || !(await bcrypt.compare(currentPassword, u.password))) {
       return res.status(400).json({ message: 'Your current password is not correct' });
     }
-    if (!validPassword(newPassword)) return res.status(400).json({ message: 'New password must be 6 to 100 characters' });
+    if (!validPassword(newPassword)) return res.status(400).json({ message: 'New password must be 8 to 100 characters' });
     if (newPassword === currentPassword) return res.status(400).json({ message: 'Choose a password different from your current one' });
     await db.query('UPDATE users SET password = ? WHERE id = ?', [await bcrypt.hash(newPassword, 10), u.id]);
-    res.json({ message: 'Password changed' });
+    await session.signOutEverywhere(u.id); // every other phone and browser has to sign in again
+    res.json({ message: 'Password changed', token: await session.signToken(u.id, u.email) }); // this device stays signed in
   } catch (err) { console.error('ACCOUNT ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
 });
 
@@ -313,11 +315,12 @@ router.get('/reset-password/check', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, password } = req.body || {};
-    if (!validPassword(password)) return res.status(400).json({ message: 'Password must be 6 to 100 characters' });
+    if (!validPassword(password)) return res.status(400).json({ message: 'Password must be 8 to 100 characters' });
     const r = await findValidReset(token);
     if (!r) return res.status(400).json({ message: 'This reset link is invalid or has expired. Please ask for a new one.' });
     await db.query('UPDATE users SET password = ? WHERE id = ?', [await bcrypt.hash(password, 10), r.user_id]);
     await db.query('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [r.user_id]);
+    await session.signOutEverywhere(r.user_id); // someone who had access with the old password is signed out too
     res.json({ message: 'Password changed. You can sign in now.' });
   } catch (err) { console.error('RESET ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
 });

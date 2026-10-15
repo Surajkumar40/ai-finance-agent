@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import api from "../api/axios";
@@ -11,7 +11,13 @@ const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
   disabled:opacity-60 disabled:cursor-not-allowed`;
 const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
 const cardClass = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-5";
-const primaryBtn = "px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-500/25";
+const btnBase = "px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-w-[140px]";
+// idle = purple, nothing to save = quiet grey, just saved = green tick (goes back by itself)
+const btnClass = (state) => state === "saved"
+  ? `${btnBase} bg-emerald-500 text-white shadow-lg shadow-emerald-500/20`
+  : state === "idle"
+    ? `${btnBase} bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-slate-500 cursor-not-allowed`
+    : `${btnBase} bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/25 disabled:opacity-60 disabled:cursor-not-allowed`;
 const ghostBtn = "px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-brand-400 hover:text-brand-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all";
 
 function Notice({ kind, children }) {
@@ -24,6 +30,26 @@ function Notice({ kind, children }) {
 
 const errText = (err, fallback) => err.response?.data?.message || fallback;
 
+// Success messages and the green "Saved" button fade back to normal on their own. Errors stay until the next try.
+function useFlash(ms = 4000) {
+  const [msg, setMsg] = useState(null);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const flash = (m) => {
+    clearTimeout(timer.current);
+    setMsg(m);
+    if (m && m.kind === "ok") timer.current = setTimeout(() => setMsg(null), ms);
+  };
+  return [msg, flash];
+}
+function useBlink(ms = 2000) {
+  const [on, setOn] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const blink = () => { clearTimeout(timer.current); setOn(true); timer.current = setTimeout(() => setOn(false), ms); };
+  return [on, blink];
+}
+
 export default function ProfilePage() {
   const { user, token, login, logout } = useAuth();
   const navigate = useNavigate();
@@ -33,21 +59,23 @@ export default function ProfilePage() {
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [memberSince, setMemberSince] = useState("");
-  const [profileMsg, setProfileMsg] = useState(null); // { kind, text }
+  const [profileMsg, setProfileMsg] = useFlash(); // { kind, text }
+  const [profileSaved, blinkProfile] = useBlink();
   const [savingProfile, setSavingProfile] = useState(false);
 
   // password
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
-  const [pwMsg, setPwMsg] = useState(null);
+  const [pwMsg, setPwMsg] = useFlash();
+  const [pwSaved, blinkPw] = useBlink();
   const [savingPw, setSavingPw] = useState(false);
 
   // data + delete
-  const [exportMsg, setExportMsg] = useState(null);
+  const [exportMsg, setExportMsg] = useFlash();
   const [exporting, setExporting] = useState("");
   const [delOpen, setDelOpen] = useState(false);
   const [delPw, setDelPw] = useState("");
   const [delWord, setDelWord] = useState("");
-  const [delMsg, setDelMsg] = useState(null);
+  const [delMsg, setDelMsg] = useFlash();
   const [deleting, setDeleting] = useState(false);
 
   // fresh copy from the server (also gives "member since")
@@ -70,7 +98,8 @@ export default function ProfilePage() {
       const res = await api.put("/account/profile", { name, email });
       login(token, res.data.user); // keep the saved login in step with the new details
       setName(res.data.user.name); setEmail(res.data.user.email);
-      setProfileMsg({ kind: "ok", text: "Saved." });
+      blinkProfile();
+      setProfileMsg({ kind: "ok", text: "Your details were updated." });
     } catch (err) {
       setProfileMsg({ kind: "err", text: errText(err, "Could not save your details. Please try again.") });
     } finally { setSavingProfile(false); }
@@ -79,13 +108,16 @@ export default function ProfilePage() {
   const savePassword = async (e) => {
     e.preventDefault();
     setPwMsg(null);
-    if (pw.next.length < 6) return setPwMsg({ kind: "err", text: "New password must be at least 6 characters." });
+    if (pw.next.length < 8) return setPwMsg({ kind: "err", text: "New password must be at least 8 characters." });
     if (pw.next !== pw.confirm) return setPwMsg({ kind: "err", text: "The two new passwords do not match." });
     setSavingPw(true);
     try {
-      await api.put("/account/password", { currentPassword: pw.current, newPassword: pw.next });
+      const res = await api.put("/account/password", { currentPassword: pw.current, newPassword: pw.next });
+      // Other devices are signed out by the server; this one gets a fresh sign-in so you stay here.
+      if (res.data?.token) { try { localStorage.setItem("token", res.data.token); } catch { /* storage blocked: you will be asked to sign in again */ } }
       setPw({ current: "", next: "", confirm: "" });
-      setPwMsg({ kind: "ok", text: "Password changed." });
+      blinkPw();
+      setPwMsg({ kind: "ok", text: "Your password was changed. Other devices were signed out." });
     } catch (err) {
       setPwMsg({ kind: "err", text: errText(err, "Could not change the password. Please try again.") });
     } finally { setSavingPw(false); }
@@ -142,15 +174,18 @@ export default function ProfilePage() {
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass} htmlFor="pf-name">Name</label>
-              <input id="pf-name" value={name} onChange={e => setName(e.target.value)} disabled={isDemo} maxLength={100} required className={inputClass} />
+              <input id="pf-name" value={name} onChange={e => { setName(e.target.value); setProfileMsg(null); }} disabled={isDemo} maxLength={100} required className={inputClass} />
             </div>
             <div>
               <label className={labelClass} htmlFor="pf-email">Email</label>
-              <input id="pf-email" type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={isDemo} maxLength={100} required className={inputClass} />
+              <input id="pf-email" type="email" value={email} onChange={e => { setEmail(e.target.value); setProfileMsg(null); }} disabled={isDemo} maxLength={100} required className={inputClass} />
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <button type="submit" disabled={isDemo || savingProfile || unchanged} className={primaryBtn}>{savingProfile ? "Saving…" : "Save changes"}</button>
+            <button type="submit" disabled={isDemo || savingProfile || unchanged}
+              className={btnClass(profileSaved ? "saved" : (unchanged || isDemo) && !savingProfile ? "idle" : "active")}>
+              {savingProfile ? "Saving…" : profileSaved ? "✓ Saved" : "Save changes"}
+            </button>
           </div>
           <Notice kind={profileMsg?.kind}>{profileMsg?.text}</Notice>
         </form>
@@ -162,21 +197,24 @@ export default function ProfilePage() {
           <div className="space-y-4">
             <div>
               <label className={labelClass} htmlFor="pw-current">Current password</label>
-              <input id="pw-current" type="password" autoComplete="current-password" value={pw.current} onChange={e => setPw({ ...pw, current: e.target.value })} disabled={isDemo} required className={inputClass} />
+              <input id="pw-current" type="password" autoComplete="current-password" value={pw.current} onChange={e => { setPw({ ...pw, current: e.target.value }); setPwMsg(null); }} disabled={isDemo} required className={inputClass} />
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass} htmlFor="pw-new">New password</label>
-                <input id="pw-new" type="password" autoComplete="new-password" value={pw.next} onChange={e => setPw({ ...pw, next: e.target.value })} disabled={isDemo} required className={inputClass} />
+                <input id="pw-new" type="password" autoComplete="new-password" value={pw.next} onChange={e => { setPw({ ...pw, next: e.target.value }); setPwMsg(null); }} disabled={isDemo} required className={inputClass} />
               </div>
               <div>
                 <label className={labelClass} htmlFor="pw-confirm">Type it again</label>
-                <input id="pw-confirm" type="password" autoComplete="new-password" value={pw.confirm} onChange={e => setPw({ ...pw, confirm: e.target.value })} disabled={isDemo} required className={inputClass} />
+                <input id="pw-confirm" type="password" autoComplete="new-password" value={pw.confirm} onChange={e => { setPw({ ...pw, confirm: e.target.value }); setPwMsg(null); }} disabled={isDemo} required className={inputClass} />
               </div>
             </div>
           </div>
           <div className="mt-4">
-            <button type="submit" disabled={isDemo || savingPw} className={primaryBtn}>{savingPw ? "Changing…" : "Change password"}</button>
+            <button type="submit" disabled={isDemo || savingPw}
+              className={btnClass(pwSaved ? "saved" : isDemo ? "idle" : "active")}>
+              {savingPw ? "Changing…" : pwSaved ? "✓ Password changed" : "Change password"}
+            </button>
           </div>
           <Notice kind={pwMsg?.kind}>{pwMsg?.text}</Notice>
         </form>
