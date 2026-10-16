@@ -8,6 +8,7 @@ import Layout from "../components/Layout";
 import BudgetProgress from "../components/BudgetProgress";
 import SpendingInsights from "../components/SpendingInsights";
 import HealthScore from "../components/HealthScore";
+import DashboardWidgets from "../components/DashboardWidgets";
 
 const COLORS = ["#7c5cfc","#10d9a0","#ffb547","#ff5e7d","#3b82f6","#f472b6","#34d399","#fb923c"];
 const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -133,6 +134,9 @@ export default function DashboardPage() {
             accent="bg-amber-50 dark:bg-amber-500/10"
             icon={<svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2"/></svg>} />
         </div>
+
+        {/* Bills coming up, goals, shared budgets */}
+        <DashboardWidgets />
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
