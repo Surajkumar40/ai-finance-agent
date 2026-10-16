@@ -55,6 +55,12 @@ app.use('/api/account', (req, res, next) => (req.method === 'DELETE' && req.path
   ? sec.rateLimit({ name: 'acct-delete', windowMs: 15 * MIN, max: 8, skipSuccess: true, message: 'Too many wrong passwords. Please wait 15 minutes.' })(req, res, next)
   : next()));
 
+// the daily job: a wrong key can only be tried a few times
+app.use('/api/cron', sec.rateLimit({ name: 'cron-bad-key', windowMs: 15 * MIN, max: 10, skipSuccess: true, key: (r) => r.ip, message: 'Too many wrong keys. Please wait.' }));
+app.use('/api/cron', sec.rateLimit({ name: 'cron-all', windowMs: HOUR, max: 60, key: (r) => r.ip }));
+// a test reminder email goes to your own inbox: a few per hour is plenty
+app.use('/api/account/reminders/test', only('POST', sec.rateLimit({ name: 'reminder-test', windowMs: HOUR, max: 5, message: 'You sent a few test emails already. Please try again in an hour.' })));
+
 // AI calls cost money: limit them per person
 const aiLimit = sec.rateLimit({ name: 'ai', windowMs: 10 * MIN, max: 40, message: 'You are asking the AI very quickly. Please wait a few minutes.' });
 app.use('/api/ai', aiLimit);

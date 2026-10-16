@@ -63,6 +63,12 @@ export default function ProfilePage() {
   const [profileSaved, blinkProfile] = useBlink();
   const [savingProfile, setSavingProfile] = useState(false);
 
+  // bill reminder emails
+  const [rem, setRem] = useState(null);            // { enabled, days, email_ready } once loaded
+  const [remMsg, setRemMsg] = useFlash();
+  const [remBusy, setRemBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+
   // password
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
   const [pwMsg, setPwMsg] = useFlash();
@@ -103,6 +109,38 @@ export default function ProfilePage() {
     } catch (err) {
       setProfileMsg({ kind: "err", text: errText(err, "Could not save your details. Please try again.") });
     } finally { setSavingProfile(false); }
+  };
+
+  useEffect(() => {
+    let off = false;
+    if (isDemo) return undefined;
+    api.get("/account/reminders")
+      .then((r) => { if (!off) setRem(r.data); })
+      .catch(() => { if (!off) setRem({ failed: true }); });
+    return () => { off = true; };
+  }, [isDemo]);
+
+  const saveReminders = async (next) => {
+    const before = rem;
+    setRem({ ...rem, ...next }); setRemBusy(true); setRemMsg(null);
+    try {
+      const res = await api.put("/account/reminders", { enabled: next.enabled ?? rem.enabled, days: next.days ?? rem.days });
+      setRem((r) => ({ ...r, enabled: res.data.enabled, days: res.data.days }));
+      setRemMsg({ kind: "ok", text: res.data.message });
+    } catch (err) {
+      setRem(before);
+      setRemMsg({ kind: "err", text: errText(err, "Could not save. Please try again.") });
+    } finally { setRemBusy(false); }
+  };
+
+  const sendTest = async () => {
+    setTesting(true); setRemMsg(null);
+    try {
+      const res = await api.post("/account/reminders/test");
+      setRemMsg({ kind: "ok", text: res.data.message });
+    } catch (err) {
+      setRemMsg({ kind: "err", text: errText(err, "Could not send the test email. Please try again.") });
+    } finally { setTesting(false); }
   };
 
   const savePassword = async (e) => {
@@ -189,6 +227,47 @@ export default function ProfilePage() {
           </div>
           <Notice kind={profileMsg?.kind}>{profileMsg?.text}</Notice>
         </form>
+
+        {/* Bill reminder emails */}
+        <div className={cardClass} aria-label="Bill reminders">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white mb-1">Bill reminders by email</h2>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+            Get one email when a bill from your Recurring list is coming up. Each bill is mentioned once per due date. Off by default.
+          </p>
+          {isDemo ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500">Demo accounts cannot get emails. Create your own account to use this.</p>
+          ) : !rem ? (
+            <p className="text-sm text-slate-400">Loading…</p>
+          ) : rem.failed ? (
+            <p className="text-sm text-red-500">Could not load this setting. Please reload the page.</p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="rem-switch" className="text-sm text-slate-700 dark:text-slate-200">Email me before bills are due</label>
+                <button id="rem-switch" type="button" role="switch" aria-checked={rem.enabled} disabled={remBusy}
+                  onClick={() => saveReminders({ enabled: !rem.enabled })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${rem.enabled ? "bg-brand-500" : "bg-slate-300 dark:bg-white/20"}`}>
+                  <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${rem.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              {rem.enabled && (
+                <div className="mt-4 grid sm:grid-cols-[1fr_auto] gap-3 items-end">
+                  <div>
+                    <label className={labelClass} htmlFor="rem-days">Remind me</label>
+                    <select id="rem-days" className={inputClass} value={rem.days} disabled={remBusy} onChange={(e) => saveReminders({ days: Number(e.target.value) })}>
+                      {[1, 2, 3, 5, 7].map((d) => <option key={d} value={d}>{d === 1 ? "1 day before" : `${d} days before`}</option>)}
+                    </select>
+                  </div>
+                  <button type="button" onClick={sendTest} disabled={testing} className={ghostBtn}>{testing ? "Sending…" : "Send me a test email"}</button>
+                </div>
+              )}
+              {rem.enabled && !rem.email_ready && (
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">Email is not set up on the server yet, so nothing can be sent right now.</p>
+              )}
+              <Notice kind={remMsg?.kind}>{remMsg?.text}</Notice>
+            </>
+          )}
+        </div>
 
         {/* Password */}
         <form onSubmit={savePassword} className={cardClass}>

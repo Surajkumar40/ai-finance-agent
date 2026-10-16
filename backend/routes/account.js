@@ -7,6 +7,7 @@ const session = require('../services/session');
 const auth = require('../middleware/auth');
 const mailer = require('../services/mailer');
 const household = require('../services/household');
+const reminders = require('../services/reminders');
 
 // /api/account/...
 //   GET    /me                      who am I
@@ -17,6 +18,10 @@ const household = require('../services/household');
 //   POST   /forgot-password         email a reset link            (no login needed)
 //   GET    /reset-password/check    is this reset link still good (no login needed)
 //   POST   /reset-password          set a new password with a link (no login needed)
+//   GET    /reminders               my bill-reminder email settings
+//   PUT    /reminders               { enabled, days }  turn bill reminders on or off, how many days ahead (1-7)
+//   POST   /reminders/test          send myself a sample reminder email
+//   GET/POST /unsubscribe?token=    one-click unsubscribe from the email (no login needed)
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const isDemo = (email) => String(email || '').endsWith('@demo.local');
@@ -324,5 +329,77 @@ router.post('/reset-password', async (req, res) => {
     res.json({ message: 'Password changed. You can sign in now.' });
   } catch (err) { console.error('RESET ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
 });
+
+// ───────── bill reminder emails ─────────
+const reminderState = async (userId) => {
+  await reminders.ensureSchema();
+  const [[r]] = await db.query('SELECT email_reminders, reminder_days FROM users WHERE id = ?', [userId]);
+  return { enabled: !!r.email_reminders, days: Number(r.reminder_days) || 2 };
+};
+
+router.get('/reminders', auth, async (req, res) => {
+  try {
+    const u = await getUser(req.user.id);
+    if (!u) return res.status(404).json({ message: 'Account not found' });
+    res.json({ ...(await reminderState(u.id)), email_ready: !mailer.setupProblem(), demo: isDemo(u.email) });
+  } catch (err) { console.error('REMINDERS ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
+});
+
+router.put('/reminders', auth, async (req, res) => {
+  try {
+    const u = await getUser(req.user.id);
+    if (!u) return res.status(404).json({ message: 'Account not found' });
+    if (isDemo(u.email)) return res.status(403).json({ message: DEMO_MSG });
+    const { enabled, days } = req.body || {};
+    if (typeof enabled !== 'boolean') return res.status(400).json({ message: 'Choose on or off.' });
+    const d = days === undefined ? null : Number(days);
+    if (d !== null && (!Number.isInteger(d) || d < 1 || d > 7)) return res.status(400).json({ message: 'Choose 1 to 7 days.' });
+    await reminders.ensureSchema();
+    await db.query('UPDATE users SET email_reminders = ?, reminder_days = COALESCE(?, reminder_days) WHERE id = ?', [enabled ? 1 : 0, d, u.id]);
+    res.json({ ...(await reminderState(u.id)), message: enabled ? 'Bill reminders are on' : 'Bill reminders are off' });
+  } catch (err) { console.error('REMINDERS ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
+});
+
+router.post('/reminders/test', auth, async (req, res) => {
+  try {
+    const u = await getUser(req.user.id);
+    if (!u) return res.status(404).json({ message: 'Account not found' });
+    if (isDemo(u.email)) return res.status(403).json({ message: DEMO_MSG });
+    const problem = mailer.setupProblem();
+    if (problem) return res.status(503).json({ message: 'Email is not set up on the server yet, so no mail can be sent.' });
+    await reminders.ensureSchema();
+    const st = await reminderState(u.id);
+    const today = reminders.nowIn().date;
+    let items = await reminders.upcoming(u.id, today, st.days);
+    let sample = false;
+    if (!items.length) { sample = true; items = [{ id: 0, title: 'Example bill (rent, phone, subscription…)', amount: 999, due: reminders.addDays(today, 1), key: 'sample' }]; }
+    const mail = reminders.composeMail(u, items.slice(0, 15), today, { test: true });
+    const sent = await mailer.sendMail({ to: u.email, ...mail });
+    if (!sent || !sent.sent) return res.status(502).json({ message: 'The email service did not accept the message. Please try again later.' });
+    res.json({ message: `A test email was sent to ${u.email}.${sample ? ' You have no bills due soon, so it shows an example.' : ''} If you do not see it, check your spam folder.` });
+  } catch (err) { console.error('REMINDER TEST ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
+});
+
+// The link in every reminder email. Opening it only shows a button (mail scanners open links on their own);
+// pressing the button turns the reminders off.
+const page = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body><h1>${title}</h1>${body}</body></html>`;
+router.get('/unsubscribe', (req, res) => {
+  const t = typeof req.query.token === 'string' ? req.query.token : '';
+  res.type('html');
+  if (reminders.readUnsubToken(t) === null) return res.status(400).send(page('This link is not valid', '<p>It may be incomplete. You can turn bill reminders off in Profile inside the app.</p>'));
+  res.send(page('Turn off bill reminders?', `<form method="post" action="/api/account/unsubscribe?token=${encodeURIComponent(t)}"><p>You will stop getting emails about upcoming bills.</p><button type="submit">Turn off bill reminders</button></form>`));
+});
+router.post('/unsubscribe', async (req, res) => {
+  const t = typeof req.query.token === 'string' ? req.query.token : '';
+  res.type('html');
+  try {
+    const id = reminders.readUnsubToken(t);
+    if (id === null) return res.status(400).send(page('This link is not valid', '<p>You can turn bill reminders off in Profile inside the app.</p>'));
+    await reminders.ensureSchema();
+    await db.query('UPDATE users SET email_reminders = 0 WHERE id = ?', [id]);
+    res.send(page('Bill reminders are off', '<p>You will not get these emails any more. You can turn them on again in Profile inside the app.</p>'));
+  } catch (err) { console.error('UNSUBSCRIBE ERROR:', err.message); res.status(500).send(page('Something went wrong', '<p>Please try again, or turn reminders off in Profile inside the app.</p>')); }
+});
+
 
 module.exports = router;

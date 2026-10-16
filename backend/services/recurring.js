@@ -57,9 +57,13 @@ async function processDue(userId = null) {
 }
 
 function startScheduler() {
+  const reminders = require('./reminders');
   const run = () => processDue().then(
     (r) => r.created && console.log(`🔁 Recurring: created ${r.created} transaction(s)`),
     (e) => console.error('Recurring job failed:', e.message)
+  ).then(() => reminders.runIfDaytime()).then(
+    (r) => r && r.emails && console.log(`📧 Reminders: ${r.emails} email(s) for ${r.bills} bill(s)`),
+    (e) => console.error('Reminder job failed:', e.message)
   );
   run();
   setInterval(run, 60 * 60 * 1000); // every hour
