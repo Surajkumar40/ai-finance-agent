@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import { fmt as money, useCurrency, symbol, compact } from "../utils/currency";
 
-const fmt = n => (n < 0 ? "-" : "") + "₹" + Math.abs(Number(n)).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 const pad = n => String(n).padStart(2, "0");
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const parseYMD = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -21,13 +22,7 @@ function niceStep(range, ticks) {
   const f = raw / pow;
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * pow;
 }
-const short = n => {
-  const a = Math.abs(n), s = n < 0 ? "-" : "";
-  if (a >= 10000000) return `${s}₹${+(a / 10000000).toFixed(1)}Cr`;
-  if (a >= 100000) return `${s}₹${+(a / 100000).toFixed(1)}L`;
-  if (a >= 1000) return `${s}₹${+(a / 1000).toFixed(a >= 10000 ? 0 : 1)}k`;
-  return `${s}₹${Math.round(a)}`;
-};
+const short = (n) => compact(n);
 
 function Chart({ points, events }) {
   const [hover, setHover] = useState(null); // index into points
@@ -161,6 +156,7 @@ function Stat({ label, value, sub, tone }) {
 }
 
 export default function ForecastPage() {
+  useCurrency();
   const [days, setDays] = useState(30);
   const [dailyText, setDailyText] = useState("");   // what-if daily spending typed by the user
   const [daily, setDaily] = useState("");           // debounced copy of dailyText
@@ -253,7 +249,8 @@ export default function ForecastPage() {
                 <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" />Money coming in</span>
                 <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" />Bill or planned payment</span>
               </div>
-              <Chart points={data.points} events={events} />
+              {/* on a phone the chart keeps a readable size and can be swiped sideways */}
+              <div className="overflow-x-auto -mx-1 px-1"><div className="min-w-[560px]"><Chart points={data.points} events={events} /></div></div>
             </div>
 
             <div className="grid lg:grid-cols-5 gap-4">
@@ -270,7 +267,7 @@ export default function ForecastPage() {
                 <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">What if I spend per day</label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">{symbol()}</span>
                     <input type="number" min="0" inputMode="decimal" value={dailyText}
                       onChange={e => setDailyText(e.target.value)}
                       placeholder={String(Math.round(data.confidence === "custom" ? 0 : data.dailySpend))}

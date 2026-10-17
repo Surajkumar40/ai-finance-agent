@@ -5,15 +5,10 @@ import Layout from "../components/Layout";
 import api from "../api/axios";
 import { buildBaseline, simulate, presetTrimAll } from "../utils/whatif";
 import { localToday } from "../utils/voiceParse";
+import { fmt as money, useCurrency, symbol, compact } from "../utils/currency";
 
-const inr = (n) => (n < 0 ? "-" : "") + "₹" + Math.abs(Math.round(Number(n) || 0)).toLocaleString("en-IN");
-const short = (n) => {
-  const a = Math.abs(n), s = n < 0 ? "-" : "";
-  if (a >= 10000000) return `${s}₹${+(a / 10000000).toFixed(1)}Cr`;
-  if (a >= 100000) return `${s}₹${+(a / 100000).toFixed(1)}L`;
-  if (a >= 1000) return `${s}₹${+(a / 1000).toFixed(a >= 10000 ? 0 : 1)}k`;
-  return `${s}₹${Math.round(a)}`;
-};
+const inr = (n) => money(Math.round(Number(n) || 0), 0);
+const short = (n) => compact(n);
 const pctText = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
 const monthsText = (m) => {
   if (m == null) return "never";
@@ -43,6 +38,7 @@ function Tile({ label, now, next, good }) {
 }
 
 export default function SimulatorPage() {
+  useCurrency();
   const [data, setData] = useState({ status: "loading" });
   const [cuts, setCuts] = useState({});
   const [extra, setExtra] = useState("");
@@ -148,7 +144,7 @@ export default function SimulatorPage() {
                   <label htmlFor="extra" className="block text-sm font-medium text-slate-800 dark:text-slate-100">Extra income per month</label>
                   <p className="text-xs text-slate-400 mb-1.5">A raise, side income, rent from a room…</p>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">{symbol()}</span>
                     <input id="extra" type="number" inputMode="numeric" min="0" max="10000000" value={extra} placeholder="0"
                       onChange={(e) => setExtra(e.target.value === "" ? "" : String(Math.min(10000000, Math.max(0, Math.floor(Number(e.target.value) || 0)))))}
                       className="w-full pl-7 pr-3 py-2.5 rounded-xl text-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20" />

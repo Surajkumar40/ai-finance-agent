@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import { fmt as money, useCurrency, symbol } from "../utils/currency";
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const EMPTY = { title: "", amount: "", type: "expense", frequency: "monthly", category_id: "", next_due: today(), notes: "" };
 const FREQ = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
 const PER_MONTH = { daily: 30.44, weekly: 4.345, monthly: 1, yearly: 1 / 12 };
 
-const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 const parseYMD = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const niceDate = s => parseYMD(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const dueIn = s => {
@@ -26,6 +27,7 @@ const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
 const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
 
 export default function RecurringPage() {
+  useCurrency();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -175,7 +177,7 @@ export default function RecurringPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelClass}>Amount (₹)</label>
+                  <label className={labelClass}>Amount ({symbol()})</label>
                   <input type="number" min="0" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" className={inputClass} />
                 </div>
                 <div>

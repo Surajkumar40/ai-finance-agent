@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import { fmt as money, useCurrency, symbol } from "../utils/currency";
 
-const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 
 // ---- month helpers (month is always "YYYY-MM") ----
 const pad = n => String(n).padStart(2, "0");
@@ -38,6 +39,7 @@ const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
 const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
 
 export default function BudgetsPage() {
+  useCurrency();
   const [month, setMonth] = useState(thisMonth());
   const [budgets, setBudgets] = useState([]);
   const [unbudgeted, setUnbudgeted] = useState([]);
@@ -338,7 +340,7 @@ export default function BudgetsPage() {
                 </div>
               )}
               <div>
-                <label className={labelClass}>Monthly limit (₹)</label>
+                <label className={labelClass}>Monthly limit ({symbol()})</label>
                 <input type="number" min="1" value={modal.monthly_limit} autoFocus
                   onChange={e => setModal({ ...modal, monthly_limit: e.target.value })}
                   onKeyDown={e => e.key === "Enter" && save()}

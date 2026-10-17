@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import { useCurrency, setCurrency } from "../utils/currency";
 
 const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
   bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10
@@ -63,6 +64,12 @@ export default function ProfilePage() {
   const [profileSaved, blinkProfile] = useBlink();
   const [savingProfile, setSavingProfile] = useState(false);
 
+  // display currency
+  const currentCurrency = useCurrency();
+  const [curList, setCurList] = useState([]);
+  const [curMsg, setCurMsg] = useFlash();
+  const [curBusy, setCurBusy] = useState(false);
+
   // bill reminder emails
   const [rem, setRem] = useState(null);            // { enabled, days, email_ready } once loaded
   const [remMsg, setRemMsg] = useFlash();
@@ -90,6 +97,8 @@ export default function ProfilePage() {
     api.get("/account/me").then(res => {
       if (cancelled) return;
       setName(res.data.name); setEmail(res.data.email);
+      if (Array.isArray(res.data.currencies)) setCurList(res.data.currencies);
+      if (res.data.currency) setCurrency(res.data.currency);
       if (res.data.created_at) setMemberSince(new Date(res.data.created_at).toLocaleDateString("en-IN", { month: "long", year: "numeric" }));
     }).catch(() => { /* the saved copy is fine */ });
     return () => { cancelled = true; };
@@ -119,6 +128,14 @@ export default function ProfilePage() {
       .catch(() => { if (!off) setRem({ failed: true }); });
     return () => { off = true; };
   }, [isDemo]);
+
+  const saveCurrency = async (code) => {
+    const before = currentCurrency;
+    setCurrency(code); setCurBusy(true); setCurMsg(null);
+    try { await api.put("/account/currency", { currency: code }); setCurMsg({ kind: "ok", text: "Currency updated." }); }
+    catch (err) { setCurrency(before); setCurMsg({ kind: "err", text: errText(err, "Could not change the currency. Please try again.") }); }
+    finally { setCurBusy(false); }
+  };
 
   const saveReminders = async (next) => {
     const before = rem;
@@ -227,6 +244,19 @@ export default function ProfilePage() {
           </div>
           <Notice kind={profileMsg?.kind}>{profileMsg?.text}</Notice>
         </form>
+
+        {/* Display currency */}
+        <div className={cardClass} aria-label="Currency">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white mb-1">Currency</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Choose the symbol shown next to your amounts. This only changes how numbers look. Nothing is converted, so ₹1,000 becomes $1,000.</p>
+          <label className={labelClass} htmlFor="pf-currency">Show amounts in</label>
+          <select id="pf-currency" className={inputClass} value={currentCurrency} disabled={isDemo || curBusy || !curList.length} onChange={(e) => saveCurrency(e.target.value)}>
+            {curList.length === 0 && <option value={currentCurrency}>{currentCurrency}</option>}
+            {curList.map((c) => <option key={c.code} value={c.code}>{c.code} · {c.name} ({c.sample})</option>)}
+          </select>
+          {isDemo && <p className="text-xs text-slate-400 mt-2">Not available in the demo.</p>}
+          <Notice kind={curMsg?.kind}>{curMsg?.text}</Notice>
+        </div>
 
         {/* Bill reminder emails */}
         <div className={cardClass} aria-label="Bill reminders">

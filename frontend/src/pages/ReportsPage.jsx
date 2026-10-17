@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import { fmt as money, useCurrency } from "../utils/currency";
 
-const fmt = n => (n < 0 ? "-" : "") + "₹" + Math.abs(Number(n)).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 const pad = n => String(n).padStart(2, "0");
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
 const localToday = () => { const d = new Date(); return `${thisMonth()}-${pad(d.getDate())}`; };
@@ -84,6 +85,7 @@ const STATUS = {
 
 // ───────── page ─────────
 export default function ReportsPage() {
+  useCurrency();
   const { user } = useAuth();
   const [month, setMonth] = useState(thisMonth());
   const [result, setResult] = useState(null); // { month, data } | { month, error }
@@ -213,7 +215,7 @@ export default function ReportsPage() {
             {/* Daily */}
             <div className={card}>
               <h3 className="text-sm font-semibold text-slate-800 dark:text-white mb-2">Spending day by day</h3>
-              <DailyChart daily={data.daily} />
+              <div className="overflow-x-auto -mx-1 px-1"><div className="min-w-[560px]"><DailyChart daily={data.daily} /></div></div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">

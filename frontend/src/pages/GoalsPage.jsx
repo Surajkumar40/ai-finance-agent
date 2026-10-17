@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import { fmt as money, useCurrency, symbol } from "../utils/currency";
 
 const ICONS = ["🎯", "💻", "🏠", "🚗", "✈️", "📱", "🎓", "💍", "🏍️", "🛡️"];
 const EMPTY = { name: "", icon: "🎯", target_amount: "", saved_amount: "", target_date: "" };
 
-const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 const niceDate = s => {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -32,6 +33,7 @@ function Modal({ title, onClose, children }) {
 }
 
 export default function GoalsPage() {
+  useCurrency();
   const [goals, setGoals] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [form, setForm] = useState(null);      // null = closed, object = create/edit form
@@ -190,12 +192,12 @@ export default function GoalsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>Target (₹)</label>
+                <label className={labelClass}>Target ({symbol()})</label>
                 <input type="number" min="0" value={form.target_amount} onChange={e => setForm({ ...form, target_amount: e.target.value })} placeholder="50000" className={inputClass} />
               </div>
               {!editId && (
                 <div>
-                  <label className={labelClass}>Already saved (₹)</label>
+                  <label className={labelClass}>Already saved ({symbol()})</label>
                   <input type="number" min="0" value={form.saved_amount} onChange={e => setForm({ ...form, saved_amount: e.target.value })} placeholder="0" className={inputClass} />
                 </div>
               )}
@@ -220,7 +222,7 @@ export default function GoalsPage() {
             {error && <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 text-red-500 text-sm">{error}</div>}
             <p className="text-xs text-slate-400">Saved so far: <span className="font-mono text-slate-600 dark:text-slate-300">{fmt(money.goal.saved_amount)}</span> of {fmt(money.goal.target_amount)}</p>
             <div>
-              <label className={labelClass}>Amount (₹)</label>
+              <label className={labelClass}>Amount ({symbol()})</label>
               <input type="number" min="0" autoFocus value={money.amount} onChange={e => setMoney({ ...money, amount: e.target.value })} placeholder="0" className={inputClass} />
             </div>
           </div>
