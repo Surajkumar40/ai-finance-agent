@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
+import { fmt as money, useCurrency } from "../utils/currency";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
-const fmt = n => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 const pad = n => String(n).padStart(2, "0");
 const nowMonth = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
 const shift = (ym, delta) => {
@@ -38,6 +39,7 @@ const Tip = ({ active, payload, label: day }) => {
 };
 
 export default function SpendingInsights() {
+  useCurrency();
   const [month, setMonth] = useState(nowMonth());
   const [data, setData] = useState(null);
   const [error, setError] = useState("");

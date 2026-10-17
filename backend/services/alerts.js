@@ -1,11 +1,12 @@
 const db = require('../config/db');
 
-const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const cur = require('./currency'); // amounts in alert texts use each person's own display currency
 const currentMonth = () => new Date().toISOString().slice(0, 7); // same convention as routes/budgets.js
 
 // Creates "budget_warning" (>=80%) and "budget_exceeded" (>=100%) alerts.
 // Each level is created only ONCE per category per month.
 async function checkPersonalBudgets(userId) {
+  const inr = await cur.forUser(userId);
   const month = currentMonth();
   const [rows] = await db.query(
     `SELECT b.category_id, b.monthly_limit, c.name AS category_name,
@@ -162,6 +163,7 @@ const insertAlert = (userId, type, message, meta) =>
 
 // Creates "anomaly" and "duplicate_charge" alerts, each only once per transaction.
 async function checkSpending(userId, today) {
+  const inr = await cur.forUser(userId);
   const [expenses] = await db.query(
     `SELECT t.id, t.title, t.amount, t.date, t.category_id, t.is_recurring, c.name AS category_name
        FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
@@ -196,6 +198,7 @@ async function checkSpending(userId, today) {
 const BILL_REMINDER_DAYS = 3;
 // "bill_due" alert when a recurring expense is due within 3 days. Once per bill per due date.
 async function checkBills(userId, today) {
+  const inr = await cur.forUser(userId);
   const [bills] = await db.query(
     `SELECT id, title, amount, next_due FROM recurring_transactions
       WHERE user_id = ? AND is_active = 1 AND type = 'expense' AND next_due >= ? AND next_due <= ?`,

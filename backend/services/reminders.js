@@ -45,7 +45,7 @@ function nowIn(tz = TZ, at = new Date()) {
 const addDays = (ymd, n) => { const d = new Date(ymd + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
 const ymdOf = (v) => (v instanceof Date ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}` : String(v).slice(0, 10));
-const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const currency = require('./currency');
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const whenText = (n, due) => {
   const label = new Date(due + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -66,6 +66,7 @@ const frontendUrl = () => String(process.env.FRONTEND_URL || '').trim().replace(
 
 // ───────── the email ─────────
 function composeMail(user, items, today, { test = false } = {}) {
+  const inr = currency.formatter(user.currency, 2); // user.currency is optional: missing means rupees
   const first = String(user.name || '').trim().split(/\s+/)[0] || 'there';
   const rows = items.map((b) => ({ ...b, n: daysBetween(today, b.due) }));
   const subject = (test ? 'Test: ' : '') + (rows.length === 1
@@ -99,9 +100,10 @@ async function upcoming(userId, today, days) {
 // opts.today overrides "today" (tests); opts.userId limits the run to one person.
 async function runReminders({ today, userId } = {}) {
   await ensureSchema();
+  await currency.ensureColumn();
   const day = today || nowIn().date;
   const [users] = await db.query(
-    `SELECT id, name, email, reminder_days FROM users WHERE email_reminders = 1 AND email NOT LIKE '%@demo.local'${userId ? ' AND id = ?' : ''}`, userId ? [userId] : []);
+    `SELECT id, name, email, reminder_days, currency FROM users WHERE email_reminders = 1 AND email NOT LIKE '%@demo.local'${userId ? ' AND id = ?' : ''}`, userId ? [userId] : []);
   const out = { users: users.length, emails: 0, bills: 0, failed: 0 };
   for (const u of users) {
     try {

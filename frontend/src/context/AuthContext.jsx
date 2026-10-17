@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from "react";
+import { resetCurrency } from "../utils/currency";
 
 const AuthContext = createContext();
 
@@ -21,6 +22,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    resetCurrency();
     setToken(null);
     setUser(null);
   };

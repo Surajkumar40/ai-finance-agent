@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import SplitExpenses from "../components/SplitExpenses";
 import { localToday } from "../utils/voiceParse";
+import { fmt as money, useCurrency, symbol } from "../utils/currency";
 
-const inr = (n) => "₹" + Math.round(Number(n) || 0).toLocaleString("en-IN");
+const inr = (n) => money(Math.round(Number(n) || 0), 0);
 const card = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl";
 const input = `w-full px-3 py-2.5 rounded-xl text-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10
   text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20`;
@@ -50,6 +52,7 @@ function useFlash() {
 const barColor = (p) => (p >= 100 ? "bg-rose-500" : p >= 80 ? "bg-amber-400" : "bg-emerald-500");
 
 export default function SharedPage() {
+  useCurrency();
   const [ov, setOv] = useState({ status: "loading" });
   const [bud, setBud] = useState(null);
   const [act, setAct] = useState(null);
@@ -352,13 +355,15 @@ export default function SharedPage() {
                     {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">{symbol()}</span>
                     <input aria-label="Monthly limit" type="number" inputMode="numeric" min="1" className={`${input} pl-7`} value={newLimit} placeholder="Monthly limit" onChange={(e) => setNewLimit(e.target.value)} />
                   </div>
                   <button className="btn-primary" disabled={busy || !newCat || !(Number(newLimit) > 0)}>Save</button>
                 </div>
               </form>
             </div>
+
+            <SplitExpenses month={month} monthText={monthLabel(month)} />
 
             <div className={`${card} p-4 sm:p-5`} aria-label="Household activity">
               <h2 className="font-semibold text-slate-900 dark:text-white">Household activity</h2>

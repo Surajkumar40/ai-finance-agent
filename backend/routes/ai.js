@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const db = require('../config/db');
+const currency = require('../services/currency');
 
 // ── AI providers: Anthropic first, Groq (free tier) as automatic fallback ──
 const Anthropic = require('@anthropic-ai/sdk');
@@ -64,6 +65,8 @@ async function askAI(system, userText, maxTokens = 600) {
 
 // Build the user's real financial context from the database
 async function buildContext(userId) {
+  const code = await currency.codeOf(userId);
+  const sym = currency.formatter(code, 0)(0).replace(/[\d.,\s\u00a0]/g, '');
   const month = new Date().toISOString().slice(0, 7); // YYYY-MM
   let ctx = `Today: ${new Date().toISOString().slice(0, 10)}\n`;
 
@@ -76,7 +79,7 @@ async function buildContext(userId) {
   );
   const income = Number(monthTotals.find(r => r.type === 'income')?.total || 0);
   const expense = Number(monthTotals.find(r => r.type === 'expense')?.total || 0);
-  ctx += `This month (${month}): income ₹${income}, expenses ₹${expense}, net ₹${income - expense}\n`;
+  ctx += `This month (${month}): income ${sym}${income}, expenses ${sym}${expense}, net ${sym}${income - expense}\n`;
 
   const [byCat] = await db.query(
     `SELECT COALESCE(c.name,'Uncategorised') AS category, SUM(t.amount) AS total
@@ -87,7 +90,7 @@ async function buildContext(userId) {
   );
   if (byCat.length) {
     ctx += 'Expenses by category this month:\n' +
-      byCat.map(r => `- ${r.category}: ₹${r.total}`).join('\n') + '\n';
+      byCat.map(r => `- ${r.category}: ${sym}${r.total}`).join('\n') + '\n';
   }
 
   const [recent] = await db.query(
@@ -98,7 +101,7 @@ async function buildContext(userId) {
   );
   if (recent.length) {
     ctx += 'Recent transactions:\n' + recent.map(r =>
-      `- ${new Date(r.date).toISOString().slice(0,10)} | ${r.type} | ₹${r.amount} | ${r.title} | ${r.category || '-'}`
+      `- ${new Date(r.date).toISOString().slice(0,10)} | ${r.type} | ${sym}${r.amount} | ${r.title} | ${r.category || '-'}`
     ).join('\n') + '\n';
   } else {
     ctx += 'The user has no transactions yet.\n';
@@ -114,7 +117,7 @@ async function buildContext(userId) {
     );
     if (budgets.length) {
       ctx += 'Budgets this month:\n' +
-        budgets.map(b => `- ${b.category}: limit ₹${b.monthly_limit}`).join('\n') + '\n';
+        budgets.map(b => `- ${b.category}: limit ${sym}${b.monthly_limit}`).join('\n') + '\n';
     }
   } catch (e) {
     console.warn('Budgets skipped:', e.message);
@@ -133,7 +136,7 @@ router.post('/chat', auth, async (req, res) => {
     const system =
       'You are a helpful personal finance assistant inside a finance tracker app. ' +
       'Use ONLY the data provided below to answer questions about the user\'s money. ' +
-      'Be concise and practical. Use ₹ for currency. If data is missing, say so.\n\n' +
+      'Be concise and practical. Use the currency symbol of the user for money, exactly as it appears in the data. If data is missing, say so.\n\n' +
       '--- USER DATA ---\n' + context;
 
     const reply = await askAI(system, message, 600);

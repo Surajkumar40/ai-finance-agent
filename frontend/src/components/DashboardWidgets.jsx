@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 import { localToday } from "../utils/voiceParse";
+import { fmt as money, useCurrency } from "../utils/currency";
 
 // Three small cards under the numbers: bills coming up, savings goals, and the household's shared budgets.
 // Each one loads on its own, so if one fails the others still show.
-const fmt = (n) => "₹" + Math.round(Number(n) || 0).toLocaleString("en-IN");
+const fmt = (n) => money(n, 0);
 const parseYMD = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const daysUntil = (s) => { const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((parseYMD(s) - t) / 86400000); };
 const whenText = (n) => (n < 0 ? "overdue" : n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`);
@@ -143,6 +144,7 @@ function Shared() {
 }
 
 export default function DashboardWidgets() {
+  useCurrency();
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <Bills />

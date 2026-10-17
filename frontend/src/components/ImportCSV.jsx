@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import api from "../api/axios";
+import { fmt as money, useCurrency } from "../utils/currency";
 import {
   MAX_ROWS, parseCSV, findHeaderRow, guessMapping, buildRows, applyKnownCategories,
 } from "../utils/importCsv";
 
-const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const fmt = (n) => money(n, 2);
 const niceDate = s => {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -30,6 +31,7 @@ function ColumnSelect({ label, value, onChange, headers, optional = true }) {
 }
 
 export default function ImportCSV({ transactions = [], categories = [], onDone }) {
+  useCurrency();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState("upload"); // upload | map | done
   const [fileName, setFileName] = useState("");

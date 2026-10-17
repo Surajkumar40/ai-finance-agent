@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import NotificationBell from "./NotificationBell";
+import { syncCurrency } from "../utils/currency";
 
 const navItems = [
   { to: "/dashboard",    label: "Dashboard",    icon: (
@@ -66,9 +67,10 @@ const navItems = [
 ];
 
 export default function Layout({ children }) {
-  const { logout, user } = useAuth();
+  const { logout, user, token } = useAuth();
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
+  useEffect(() => { syncCurrency(token); }, [token]); // the saved display currency, read once per sign-in
   const [menuOpen, setMenuOpen] = useState(false); // phone: the menu slides in over the page
 
   const handleLogout = () => { logout(); navigate("/login"); };

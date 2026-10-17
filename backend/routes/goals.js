@@ -5,7 +5,7 @@ const db = require('../config/db');
 
 const num = (v) => Number(v || 0);
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s));
-const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const currency = require('../services/currency');
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (v) => {
   if (!v) return null;
@@ -65,7 +65,7 @@ async function syncCompletion(uid, id) {
   if (done && !g.completed_at) {
     await db.query('UPDATE savings_goals SET completed_at = NOW() WHERE id = ?', [id]);
     await db.query('INSERT INTO alerts (user_id, type, message, metadata_json) VALUES (?,?,?,?)',
-      [uid, 'goal_completed', `🎉 Goal reached: ${g.name} (${inr(g.target_amount)})! Time to celebrate.`, JSON.stringify({ goal_id: id })]);
+      [uid, 'goal_completed', `🎉 Goal reached: ${g.name} (${(await currency.forUser(uid))(g.target_amount)})! Time to celebrate.`, JSON.stringify({ goal_id: id })]);
   } else if (!done && g.completed_at) {
     await db.query('UPDATE savings_goals SET completed_at = NULL WHERE id = ?', [id]);
   }

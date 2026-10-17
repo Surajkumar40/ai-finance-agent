@@ -8,6 +8,7 @@ const auth = require('../middleware/auth');
 const mailer = require('../services/mailer');
 const household = require('../services/household');
 const reminders = require('../services/reminders');
+const currency = require('../services/currency');
 
 // /api/account/...
 //   GET    /me                      who am I
@@ -64,7 +65,21 @@ router.get('/me', auth, async (req, res) => {
   try {
     const u = await getUser(req.user.id);
     if (!u) return res.status(404).json({ message: 'Account not found' });
-    res.json({ ...publicUser(u), created_at: u.created_at, isDemo: isDemo(u.email) });
+    res.json({ ...publicUser(u), created_at: u.created_at, isDemo: isDemo(u.email), currency: await currency.codeOf(u.id), currencies: currency.list() });
+  } catch (err) { console.error('ACCOUNT ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
+});
+
+// Display currency only: no conversion, your numbers keep their values.
+router.put('/currency', auth, async (req, res) => {
+  try {
+    const u = await getUser(req.user.id);
+    if (!u) return res.status(404).json({ message: 'Account not found' });
+    if (isDemo(u.email)) return res.status(403).json({ message: DEMO_MSG });
+    const code = req.body && req.body.currency;
+    if (!currency.isValid(code)) return res.status(400).json({ message: 'Choose one of the listed currencies.' });
+    await currency.ensureColumn();
+    await db.query('UPDATE users SET currency = ? WHERE id = ?', [code, u.id]);
+    res.json({ currency: code, message: 'Currency updated' });
   } catch (err) { console.error('ACCOUNT ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
 });
 
@@ -174,6 +189,7 @@ router.delete('/', auth, async (req, res) => {
       catch (e) { if (e.code !== 'ER_NO_SUCH_TABLE') throw e; }
     }
     await household.ensureTables();
+    await household.anonymizeUser(uid, conn); // their name leaves the shared money history
     await household.removeUserFromHousehold(uid, conn); // hands the household on, or closes it if you were the last one
     await conn.query('DELETE FROM users WHERE id = ?', [uid]);
     await conn.commit();
@@ -373,7 +389,7 @@ router.post('/reminders/test', auth, async (req, res) => {
     let items = await reminders.upcoming(u.id, today, st.days);
     let sample = false;
     if (!items.length) { sample = true; items = [{ id: 0, title: 'Example bill (rent, phone, subscription…)', amount: 999, due: reminders.addDays(today, 1), key: 'sample' }]; }
-    const mail = reminders.composeMail(u, items.slice(0, 15), today, { test: true });
+    const mail = reminders.composeMail({ ...u, currency: await currency.codeOf(u.id) }, items.slice(0, 15), today, { test: true });
     const sent = await mailer.sendMail({ to: u.email, ...mail });
     if (!sent || !sent.sent) return res.status(502).json({ message: 'The email service did not accept the message. Please try again later.' });
     res.json({ message: `A test email was sent to ${u.email}.${sample ? ' You have no bills due soon, so it shows an example.' : ''} If you do not see it, check your spam folder.` });

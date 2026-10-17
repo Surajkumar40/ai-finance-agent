@@ -9,9 +9,10 @@ import BudgetProgress from "../components/BudgetProgress";
 import SpendingInsights from "../components/SpendingInsights";
 import HealthScore from "../components/HealthScore";
 import DashboardWidgets from "../components/DashboardWidgets";
+import { fmt as money, useCurrency } from "../utils/currency";
 
 const COLORS = ["#7c5cfc","#10d9a0","#ffb547","#ff5e7d","#3b82f6","#f472b6","#34d399","#fb923c"];
-const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 
 function StatCard({ label, value, sub, accent, icon }) {
   return (
@@ -41,6 +42,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function DashboardPage() {
+  useCurrency();
   const [summary, setSummary] = useState({ income: 0, expenses: 0, balance: 0 });
   const [pieData, setPieData] = useState([]);
   const [barData, setBarData] = useState([]);

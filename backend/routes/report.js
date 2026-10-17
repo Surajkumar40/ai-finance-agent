@@ -17,7 +17,7 @@ const shiftMonth = (month, delta) => {
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
 };
-const inr = (n) => '₹' + Math.round(Number(n)).toLocaleString('en-IN');
+const currency = require('../services/currency');
 const round2 = (n) => Math.round(n * 100) / 100;
 const pct = (a, b) => (b > 0 ? Math.round(((a - b) / b) * 100) : null);
 const dayLabel = (s) => new Date(s + 'T00:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -33,7 +33,9 @@ function userToday(q) {
 //   cur / prev  transactions of the month and of the month before: [{ id, title, amount, type, date, category_id, category_name, icon, color }]
 //   budgets     [{ category_id, category_name, icon, color, monthly_limit }]
 //   goals       [{ name, icon, target_amount, saved_amount, completed_at }]
-function buildReport({ month, today, cur, prev, budgets, goals }) {
+function buildReport({ month, today, cur, prev, budgets, goals, currencyCode }) {
+  const fmt = currency.formatter(currencyCode);
+  const inr = (n) => fmt(Math.round(Number(n)));
   const [y, m] = month.split('-').map(Number);
   const dim = daysInMonth(y, m);
   const todayMonth = today.slice(0, 7);
@@ -153,7 +155,7 @@ router.get('/', auth, async (req, res) => {
          FROM budgets b JOIN categories c ON c.id = b.category_id WHERE b.user_id = ? AND b.month = ?`, [userId, first]);
     const [goals] = await db.query(
       'SELECT name, icon, target_amount, saved_amount, completed_at FROM savings_goals WHERE user_id = ? ORDER BY id', [userId]);
-    res.json(buildReport({ month, today, cur, prev, budgets, goals }));
+    res.json(buildReport({ month, today, cur, prev, budgets, goals, currencyCode: await currency.codeOf(userId) }));
   } catch (err) {
     console.error('REPORT ERROR:', err.message);
     res.status(500).json({ message: 'Could not build the report' });

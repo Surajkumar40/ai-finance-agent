@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
+import { fmt as money, useCurrency, symbol } from "../utils/currency";
 
-const fmt = n => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (n) => money(n, 0);
 
 function getBarColor(pct) {
   if (pct >= 100) return { bar: "bg-red-500", text: "text-red-500", bg: "bg-red-50 dark:bg-red-500/10" };
@@ -10,6 +11,7 @@ function getBarColor(pct) {
 }
 
 export default function BudgetProgress() {
+  useCurrency();
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -156,7 +158,7 @@ export default function BudgetProgress() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                  Monthly Limit (₹)
+                  Monthly Limit ({symbol()})
                 </label>
                 <input type="number" value={form.monthly_limit}
                   onChange={e => setForm({...form, monthly_limit: e.target.value})}

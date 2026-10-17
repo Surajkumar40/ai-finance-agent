@@ -5,6 +5,7 @@ import { downloadCSV } from "../utils/csv";
 import ImportCSV from "../components/ImportCSV";
 import VoiceEntry from "../components/VoiceEntry";
 import { localToday } from "../utils/voiceParse";
+import { fmt as money, useCurrency, symbol } from "../utils/currency";
 
 const EMPTY_FORM = {
   title: "", amount: "", type: "expense",
@@ -31,6 +32,7 @@ async function fileToDataUrl(file, maxSide = 1600, quality = 0.82) {
 }
 
 export default function TransactionsPage() {
+  useCurrency();
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -107,7 +109,7 @@ export default function TransactionsPage() {
     } finally { setLoading(false); }
   };
 
-  const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  const fmt = (n) => money(n, 0);
 
   const filtered = transactions
     .filter(t => filter === "all" || t.type === filter)
@@ -323,7 +325,7 @@ export default function TransactionsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Amount (₹)</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Amount ({symbol()})</label>
                   <input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})}
                     placeholder="0" className={inputClass} />
                 </div>

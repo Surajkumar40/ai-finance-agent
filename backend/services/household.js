@@ -1,163 +1,545 @@
-// Shared budgets ("households"): a few people (a couple, a family, flatmates) who track budgets together.
-// Rules in one place:
-//  - one person belongs to at most one household
-//  - members see each other's TOTALS per category; single transactions only from people who chose to share them (off by default)
-//  - shared budgets use the standard categories only (everyone has those, custom ones are private)
-//  - the tables are created the first time they are needed, so no migration is required
+// Shared budgets. Mounted automatically as /api/household.
+//   GET    /                       my household (members, pending invites) + invites waiting for me
+//   POST   /                       create a household            { name }
+//   PATCH  /                       rename it (owner)             { name }
+//   DELETE /                       close it for everyone (owner)
+//   POST   /leave                  leave (the owner role passes on; the last one out closes it)
+//   DELETE /members/:userId        remove someone (owner)
+//   POST   /invites                invite by email               { email }  -> also returns a link to copy
+//   DELETE /invites/:id            cancel a pending invite
+//   POST   /invites/:id/accept     accept an invite sent to my email
+//   POST   /invites/:id/decline    decline it
+//   GET    /invite-info?token=     who invited me (for the link page)
+//   POST   /join                   accept through the link        { token }
+//   PATCH  /me/sharing             choose whether my transactions are visible to the household { share: true|false }
+//   GET    /activity?month=        transactions of members who chose to share (never notes)
+//   GET    /expenses?month=        shared expenses of the month, everyone's balance, and who should pay whom
+//   POST   /expenses               add a shared expense   { title, amount, date, paid_by?, split_among? }
+//   DELETE /expenses/:id           delete one (who added it, who paid it, or the owner)
+//   POST   /settlements            record a payment between two members { to_user | from_user, amount, date? }
+//   DELETE /settlements/:id        undo one (either person, or the owner)
+//   GET    /budgets?month=YYYY-MM  shared budgets with spending, and each member's share (totals only)
+//   POST   /budgets                set a shared limit            { category_id, monthly_limit, month? }
+//   POST   /budgets/copy           copy limits to another month  { from, to }
+//   DELETE /budgets/:id            remove a shared budget
+const express = require('express');
+const crypto = require('crypto');
+const router = express.Router();
 const db = require('../config/db');
+const auth = require('../middleware/auth');
+const mailer = require('../services/mailer');
+const hh = require('../services/household');
+const split = require('../services/split');
 
-const MAX_MEMBERS = 6; // members + pending invites
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const INVITE_DAYS = 7;
+const INVITES_PER_HOUR = 10;
+const DEMO_MSG = 'Demo accounts cannot use shared budgets. Create your own account to try it.';
 
-let ready;
-function ensureTables() {
-  if (!ready) {
-    ready = (async () => {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS households (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          name VARCHAR(60) NOT NULL,
-          owner_id INT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
-        )`);
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS household_members (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          household_id INT NOT NULL,
-          user_id INT NOT NULL,
-          role ENUM('owner','member') NOT NULL DEFAULT 'member',
-          share_transactions TINYINT(1) NOT NULL DEFAULT 0,
-          joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE KEY one_household_per_user (user_id),
-          FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )`);
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS household_invites (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          household_id INT NOT NULL,
-          email VARCHAR(100) NOT NULL,
-          token_hash CHAR(64) NOT NULL,
-          invited_by INT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          expires_at DATETIME NOT NULL,
-          accepted_at DATETIME NULL,
-          revoked_at DATETIME NULL,
-          INDEX idx_token (token_hash),
-          INDEX idx_email (email),
-          FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE,
-          FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE CASCADE
-        )`);
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS household_budgets (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          household_id INT NOT NULL,
-          category_id INT NOT NULL,
-          monthly_limit DECIMAL(12,2) NOT NULL,
-          month DATE NOT NULL,
-          created_by INT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE KEY one_per_category_month (household_id, category_id, month),
-          FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE,
-          FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
-          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-        )`);
-      // households created before this setting existed get the column added (default: not shared)
-      const [col] = await db.query(
-        `SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'household_members' AND COLUMN_NAME = 'share_transactions'`);
-      if (!col.length) await db.query('ALTER TABLE household_members ADD COLUMN share_transactions TINYINT(1) NOT NULL DEFAULT 0');
-    })().catch((e) => { ready = null; throw e; }); // try again next time if it failed
-  }
-  return ready;
-}
-
-// { household_id, name, role, owner_id } or null
-async function membershipOf(userId, conn = db) {
-  const [rows] = await conn.query(
-    `SELECT m.household_id, m.role, h.name, h.owner_id
-       FROM household_members m JOIN households h ON h.id = m.household_id
-      WHERE m.user_id = ?`, [userId]);
-  return rows[0] || null;
-}
-
-// Only from settings, never from the request (same rule as the password reset link).
-function frontendUrl() {
-  let u = String(process.env.FRONTEND_URL || 'http://localhost:5173').trim().replace(/^["']|["']$/g, '').replace(/\/+$/, '');
-  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
-  return u;
-}
-
-// Takes a user out of their household. Used when they leave and when their account is deleted.
-// The owner leaving hands the household to the person who joined first; the last person leaving closes it.
-async function removeUserFromHousehold(userId, conn = db) {
-  const mem = await membershipOf(userId, conn);
-  if (!mem) return { left: false };
-  const [others] = await conn.query(
-    'SELECT user_id FROM household_members WHERE household_id = ? AND user_id <> ? ORDER BY joined_at, id', [mem.household_id, userId]);
-  if (!others.length) {
-    await conn.query('DELETE FROM households WHERE id = ?', [mem.household_id]); // members, invites, budgets go with it
-    return { left: true, closed: true };
-  }
-  if (mem.role === 'owner') {
-    const next = others[0].user_id;
-    await conn.query("UPDATE household_members SET role = 'owner' WHERE household_id = ? AND user_id = ?", [mem.household_id, next]);
-    await conn.query('UPDATE households SET owner_id = ? WHERE id = ?', [next, mem.household_id]);
-  }
-  await conn.query('DELETE FROM household_members WHERE user_id = ?', [userId]);
-  return { left: true, closed: false };
-}
-
-const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const clean = (s) => (typeof s === 'string' ? s.trim() : '');
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const esc = (s) => String(s).replace(/[<>&"']/g, '');
 const currentMonth = () => new Date().toISOString().slice(0, 7);
+const monthStart = (m) => { const x = m || currentMonth(); return MONTH_RE.test(x) ? x + '-01' : null; };
+const PENDING = 'accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()';
 
-// "Shared" budget alerts: when everyone's spending together passes 80% or 100% of a shared budget,
-// every member gets one alert per level per month (same dedupe idea as personal budgets).
-async function checkHouseholdBudgets(userId) {
-  await ensureTables();
-  const mem = await membershipOf(userId);
-  if (!mem) return [];
-  const month = currentMonth();
-  const [rows] = await db.query(
-    `SELECT hb.category_id, hb.monthly_limit, c.name AS category_name,
-            COALESCE(SUM(t.amount), 0) AS spent
-       FROM household_budgets hb
-       JOIN categories c ON c.id = hb.category_id
-       LEFT JOIN transactions t
-         ON t.category_id = hb.category_id AND t.type = 'expense'
-        AND DATE_FORMAT(t.date, '%Y-%m-01') = hb.month
-        AND t.user_id IN (SELECT user_id FROM household_members WHERE household_id = hb.household_id)
-      WHERE hb.household_id = ? AND hb.month = ?
-      GROUP BY hb.id, c.id`, [mem.household_id, month + '-01']);
-  if (!rows.length) return [];
-  const [members] = await db.query('SELECT user_id FROM household_members WHERE household_id = ?', [mem.household_id]);
+router.use(auth, async (req, res, next) => {
+  try {
+    const [rows] = await db.query('SELECT id, name, email FROM users WHERE id = ?', [req.user.id]);
+    if (!rows[0]) return res.status(401).json({ message: 'Invalid or expired token.' });
+    if (String(rows[0].email).endsWith('@demo.local')) return res.status(403).json({ message: DEMO_MSG });
+    req.me = rows[0];
+    await hh.ensureTables();
+    next();
+  } catch (err) { console.error('HOUSEHOLD SETUP ERROR:', err.message); res.status(500).json({ message: 'Server error' }); }
+});
 
-  const created = [];
-  for (const m of members) {
-    const [existing] = await db.query(
-      `SELECT metadata_json FROM alerts WHERE user_id = ? AND type IN ('budget_warning','budget_exceeded') AND triggered_at >= ?`,
-      [m.user_id, month + '-01 00:00:00']);
-    const seen = new Set();
-    existing.forEach((e) => { try { const j = typeof e.metadata_json === 'string' ? JSON.parse(e.metadata_json) : e.metadata_json; if (j?.key) seen.add(j.key); } catch { /* ignore */ } });
+const fail = (res, err, what) => { console.error(`HOUSEHOLD ${what} ERROR:`, err.message); res.status(500).json({ message: 'Server error' }); };
 
-    for (const r of rows) {
-      const limit = Number(r.monthly_limit), spent = Number(r.spent);
-      if (!(limit > 0)) continue;
-      const pct = Math.round((spent / limit) * 100);
-      const level = spent >= limit ? 'exceeded' : pct >= 80 ? 'warning' : null;
-      if (!level) continue;
-      const key = `h${mem.household_id}:${r.category_id}:${month}:${level}`;
-      if (seen.has(key)) continue;
-      if (level === 'exceeded') seen.add(`h${mem.household_id}:${r.category_id}:${month}:warning`);
-      const message = level === 'exceeded'
-        ? `🚨 Shared budget "${mem.name}": ${r.category_name} is over its limit, ${inr(spent)} spent of ${inr(limit)}.`
-        : `⚠️ Shared budget "${mem.name}": ${pct}% of ${r.category_name} used (${inr(spent)} of ${inr(limit)}).`;
-      await db.query('INSERT INTO alerts (user_id, type, message, metadata_json) VALUES (?,?,?,?)',
-        [m.user_id, `budget_${level}`, message, JSON.stringify({ key, shared: true, category_id: r.category_id, category: r.category_name, spent, limit, percent: pct })]);
-      seen.add(key);
-      if (m.user_id === userId) created.push(message);
-    }
-  }
-  return created;
+// loads my household or answers 404
+async function needMember(req, res) {
+  const mem = await hh.membershipOf(req.me.id);
+  if (!mem) { res.status(404).json({ message: 'Create or join a household first.' }); return null; }
+  return mem;
 }
 
-module.exports = { MAX_MEMBERS, ensureTables, membershipOf, frontendUrl, removeUserFromHousehold, checkHouseholdBudgets };
+// ───────── overview ─────────
+router.get('/', async (req, res) => {
+  try {
+    const mem = await hh.membershipOf(req.me.id);
+    const [mine] = await db.query(
+      `SELECT i.id, h.name AS household_name, u.name AS invited_by_name, i.expires_at
+         FROM household_invites i JOIN households h ON h.id = i.household_id JOIN users u ON u.id = i.invited_by
+        WHERE LOWER(i.email) = LOWER(?) AND i.${PENDING} ORDER BY i.id DESC`, [req.me.email]);
+    if (!mem) return res.json({ household: null, my_invites: mine, max_members: hh.MAX_MEMBERS });
+    const [members] = await db.query(
+      `SELECT u.id AS user_id, u.name, u.email, m.role, m.joined_at, m.share_transactions
+         FROM household_members m JOIN users u ON u.id = m.user_id
+        WHERE m.household_id = ? ORDER BY m.joined_at, m.id`, [mem.household_id]);
+    const [invites] = await db.query(
+      `SELECT id, email, created_at, expires_at FROM household_invites WHERE household_id = ? AND ${PENDING} ORDER BY id DESC`, [mem.household_id]);
+    res.json({
+      household: { id: mem.household_id, name: mem.name, role: mem.role, members: members.map((m) => ({ ...m, share_transactions: !!m.share_transactions, is_me: m.user_id === req.me.id })), invites },
+      my_invites: mine, max_members: hh.MAX_MEMBERS,
+    });
+  } catch (err) { fail(res, err, 'OVERVIEW'); }
+});
+
+router.post('/', async (req, res) => {
+  const name = clean(req.body?.name);
+  if (name.length < 2 || name.length > 60) return res.status(400).json({ message: 'Give the household a name of 2 to 60 characters.' });
+  let conn;
+  try {
+    conn = await db.getConnection(); await conn.beginTransaction();
+    if (await hh.membershipOf(req.me.id, conn)) { await conn.rollback(); return res.status(409).json({ message: 'You are already in a household. Leave it first.' }); }
+    const [r] = await conn.query('INSERT INTO households (name, owner_id) VALUES (?, ?)', [name, req.me.id]);
+    await conn.query("INSERT INTO household_members (household_id, user_id, role) VALUES (?, ?, 'owner')", [r.insertId, req.me.id]);
+    await conn.commit();
+    res.status(201).json({ id: r.insertId, message: 'Household created' });
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* ignore */ } }
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'You are already in a household. Leave it first.' });
+    fail(res, err, 'CREATE');
+  } finally { if (conn) conn.release(); }
+});
+
+router.patch('/', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    if (mem.role !== 'owner') return res.status(403).json({ message: 'Only the owner can rename the household.' });
+    const name = clean(req.body?.name);
+    if (name.length < 2 || name.length > 60) return res.status(400).json({ message: 'Give the household a name of 2 to 60 characters.' });
+    await db.query('UPDATE households SET name = ? WHERE id = ?', [name, mem.household_id]);
+    res.json({ message: 'Renamed' });
+  } catch (err) { fail(res, err, 'RENAME'); }
+});
+
+router.delete('/', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    if (mem.role !== 'owner') return res.status(403).json({ message: 'Only the owner can close the household. You can leave it instead.' });
+    await db.query('DELETE FROM households WHERE id = ?', [mem.household_id]);
+    res.json({ message: 'Household closed' });
+  } catch (err) { fail(res, err, 'CLOSE'); }
+});
+
+router.post('/leave', async (req, res) => {
+  let conn;
+  try {
+    conn = await db.getConnection(); await conn.beginTransaction();
+    const r = await hh.removeUserFromHousehold(req.me.id, conn);
+    if (!r.left) { await conn.rollback(); return res.status(404).json({ message: 'You are not in a household.' }); }
+    await conn.commit();
+    res.json({ message: r.closed ? 'You were the last person, so the household was closed.' : 'You left the household.' });
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* ignore */ } }
+    fail(res, err, 'LEAVE');
+  } finally { if (conn) conn.release(); }
+});
+
+router.delete('/members/:userId', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    if (mem.role !== 'owner') return res.status(403).json({ message: 'Only the owner can remove people.' });
+    const target = Number(req.params.userId);
+    if (!Number.isInteger(target) || target <= 0) return res.status(404).json({ message: 'That person is not in your household.' });
+    if (target === req.me.id) return res.status(400).json({ message: 'Use "Leave" to leave the household yourself.' });
+    const [r] = await db.query('DELETE FROM household_members WHERE household_id = ? AND user_id = ?', [mem.household_id, target]);
+    if (!r.affectedRows) return res.status(404).json({ message: 'That person is not in your household.' });
+    res.json({ message: 'Removed' });
+  } catch (err) { fail(res, err, 'REMOVE'); }
+});
+
+// ───────── invites ─────────
+router.post('/invites', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const email = clean(req.body?.email).toLowerCase();
+    if (!EMAIL_RE.test(email) || email.length > 100) return res.status(400).json({ message: 'Enter a valid email address.' });
+    if (email === String(req.me.email).toLowerCase()) return res.status(400).json({ message: 'That is your own email address.' });
+    const [already] = await db.query(
+      `SELECT 1 FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ? AND LOWER(u.email) = ?`, [mem.household_id, email]);
+    if (already.length) return res.status(409).json({ message: 'That person is already in your household.' });
+    const [[{ recent }]] = await db.query(
+      'SELECT COUNT(*) AS recent FROM household_invites WHERE household_id = ? AND created_at > NOW() - INTERVAL 1 HOUR', [mem.household_id]);
+    if (Number(recent) >= INVITES_PER_HOUR) return res.status(429).json({ message: 'Too many invites in the last hour. Try again later.' });
+
+    // sending again to the same address replaces the older link
+    await db.query(`UPDATE household_invites SET revoked_at = NOW() WHERE household_id = ? AND LOWER(email) = ? AND ${PENDING}`, [mem.household_id, email]);
+    const [[{ members }]] = await db.query('SELECT COUNT(*) AS members FROM household_members WHERE household_id = ?', [mem.household_id]);
+    const [[{ pending }]] = await db.query(`SELECT COUNT(*) AS pending FROM household_invites WHERE household_id = ? AND ${PENDING}`, [mem.household_id]);
+    if (Number(members) + Number(pending) >= hh.MAX_MEMBERS) return res.status(400).json({ message: `A household can have up to ${hh.MAX_MEMBERS} people, counting pending invites.` });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const [r] = await db.query(
+      `INSERT INTO household_invites (household_id, email, token_hash, invited_by, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL ${INVITE_DAYS} DAY)`,
+      [mem.household_id, email, sha256(token), req.me.id]);
+    const link = `${hh.frontendUrl()}/join?token=${token}`;
+
+    let emailed = false;
+    try {
+      const sent = await mailer.sendMail({
+        to: email,
+        subject: `${req.me.name} invited you to share budgets on Finance AI`,
+        text: `Hi,\n\n${req.me.name} invited you to join "${mem.name}" on Finance AI, to track budgets together. You will only see each other's totals per category, never single transactions.\n\nOpen this link (it works for ${INVITE_DAYS} days). You need an account with this email address (${email}); you can create one on the same page:\n\n${link}\n\nIf you do not know ${req.me.name}, ignore this email.\n`,
+        html: `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto;color:#1e293b">
+          <h2 style="margin:0 0 12px">You're invited</h2>
+          <p><b>${esc(req.me.name)}</b> invited you to join <b>${esc(mem.name)}</b> on Finance AI, to track budgets together.</p>
+          <p style="font-size:13px;color:#64748b">You will only see each other's totals per category, never single transactions.</p>
+          <p style="margin:24px 0"><a href="${link}" style="background:#6d5dfc;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Join the household</a></p>
+          <p style="font-size:13px;color:#64748b">The link works for ${INVITE_DAYS} days and needs an account with <b>${esc(email)}</b>. Or copy it into your browser:<br>${link}</p>
+          <p style="font-size:13px;color:#64748b">If you do not know ${esc(req.me.name)}, ignore this email.</p></div>`,
+      });
+      emailed = !!sent.sent;
+    } catch (e) { console.error('HOUSEHOLD INVITE MAIL ERROR:', e.message); }
+
+    res.status(201).json({ invite: { id: r.insertId, email }, link, emailed, message: emailed ? 'Invite sent' : 'Invite created. The email could not be sent, so share the link yourself.' });
+  } catch (err) { fail(res, err, 'INVITE'); }
+});
+
+router.delete('/invites/:id', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const [r] = await db.query(`UPDATE household_invites SET revoked_at = NOW() WHERE id = ? AND household_id = ? AND ${PENDING}`, [Number(req.params.id) || 0, mem.household_id]);
+    if (!r.affectedRows) return res.status(404).json({ message: 'Invite not found.' });
+    res.json({ message: 'Invite cancelled' });
+  } catch (err) { fail(res, err, 'CANCEL'); }
+});
+
+// Accepts one invite for the signed-in user. Everything is checked inside one transaction.
+async function acceptInvite(req, res, inviteWhere, params) {
+  let conn;
+  try {
+    conn = await db.getConnection(); await conn.beginTransaction();
+    const [rows] = await conn.query(
+      `SELECT i.id, i.household_id, i.email, i.accepted_at, i.revoked_at, i.expires_at < NOW() AS expired
+         FROM household_invites i WHERE ${inviteWhere} FOR UPDATE`, params);
+    const inv = rows[0];
+    const stop = async (code, message) => { await conn.rollback(); return res.status(code).json({ message }); };
+    if (!inv) return await stop(404, 'This invite was not found.');
+    if (inv.accepted_at) return await stop(410, 'This invite was already used.');
+    if (inv.revoked_at) return await stop(410, 'This invite was cancelled.');
+    if (inv.expired) return await stop(410, 'This invite has expired. Ask for a new one.');
+    if (String(inv.email).toLowerCase() !== String(req.me.email).toLowerCase()) return await stop(403, `This invite was sent to ${inv.email}. You are signed in as ${req.me.email}.`);
+    if (await hh.membershipOf(req.me.id, conn)) return await stop(409, 'You are already in a household. Leave it first.');
+    await conn.query('SELECT id FROM households WHERE id = ? FOR UPDATE', [inv.household_id]);
+    const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM household_members WHERE household_id = ?', [inv.household_id]);
+    if (Number(n) >= hh.MAX_MEMBERS) return await stop(400, 'This household is full.');
+    await conn.query("INSERT INTO household_members (household_id, user_id, role) VALUES (?, ?, 'member')", [inv.household_id, req.me.id]);
+    await conn.query('UPDATE household_invites SET accepted_at = NOW() WHERE id = ?', [inv.id]);
+    await conn.commit();
+    res.json({ message: 'You joined the household.' });
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* ignore */ } }
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'You are already in a household. Leave it first.' });
+    fail(res, err, 'ACCEPT');
+  } finally { if (conn) conn.release(); }
+}
+
+router.post('/invites/:id/accept', (req, res) => acceptInvite(req, res, 'i.id = ?', [Number(req.params.id) || 0]));
+
+router.post('/invites/:id/decline', async (req, res) => {
+  try {
+    const [r] = await db.query(`UPDATE household_invites SET revoked_at = NOW() WHERE id = ? AND LOWER(email) = LOWER(?) AND ${PENDING}`, [Number(req.params.id) || 0, req.me.email]);
+    if (!r.affectedRows) return res.status(404).json({ message: 'Invite not found.' });
+    res.json({ message: 'Invite declined' });
+  } catch (err) { fail(res, err, 'DECLINE'); }
+});
+
+const validToken = (t) => typeof t === 'string' && /^[a-f0-9]{64}$/.test(t);
+
+router.get('/invite-info', async (req, res) => {
+  try {
+    const token = req.query.token;
+    if (!validToken(token)) return res.json({ state: 'not_found' });
+    const [rows] = await db.query(
+      `SELECT i.email, h.name AS household_name, u.name AS invited_by_name, i.accepted_at, i.revoked_at, i.expires_at < NOW() AS expired
+         FROM household_invites i JOIN households h ON h.id = i.household_id JOIN users u ON u.id = i.invited_by WHERE i.token_hash = ?`, [sha256(token)]);
+    const i = rows[0];
+    if (!i) return res.json({ state: 'not_found' });
+    const state = i.accepted_at ? 'used' : i.revoked_at ? 'cancelled' : i.expired ? 'expired' : 'valid';
+    const mem = await hh.membershipOf(req.me.id);
+    res.json({
+      state, household_name: i.household_name, invited_by_name: i.invited_by_name, invite_email: i.email,
+      email_matches: String(i.email).toLowerCase() === String(req.me.email).toLowerCase(), already_in_household: !!mem, my_email: req.me.email,
+    });
+  } catch (err) { fail(res, err, 'INFO'); }
+});
+
+router.post('/join', (req, res) => {
+  const token = req.body?.token;
+  if (!validToken(token)) return res.status(404).json({ message: 'This invite was not found.' });
+  return acceptInvite(req, res, 'i.token_hash = ?', [sha256(token)]);
+});
+
+// ───────── sharing my transactions (opt-in, off by default) ─────────
+router.patch('/me/sharing', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    if (typeof req.body?.share !== 'boolean') return res.status(400).json({ message: 'Choose on or off.' });
+    await db.query('UPDATE household_members SET share_transactions = ? WHERE user_id = ?', [req.body.share ? 1 : 0, req.me.id]);
+    res.json({ share: req.body.share, message: req.body.share ? 'Your transactions are now visible to the household' : 'Your transactions are private again' });
+  } catch (err) { fail(res, err, 'SHARING'); }
+});
+
+// Only people who switched sharing on appear here. Notes are never included.
+router.get('/activity', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const start = monthStart(req.query.month);
+    if (!start) return res.status(400).json({ message: 'Month must look like 2026-10.' });
+    const [rows] = await db.query(
+      `SELECT t.id, t.title, t.amount, t.type, DATE_FORMAT(t.date, '%Y-%m-%d') AS date,
+              c.name AS category_name, c.icon, u.id AS user_id, u.name AS member_name
+         FROM transactions t
+         JOIN household_members m ON m.user_id = t.user_id AND m.household_id = ? AND m.share_transactions = 1
+         JOIN users u ON u.id = t.user_id
+         LEFT JOIN categories c ON c.id = t.category_id
+        WHERE DATE_FORMAT(t.date, '%Y-%m-01') = ?
+        ORDER BY t.date DESC, t.id DESC LIMIT 200`, [mem.household_id, start]);
+    const [sharing] = await db.query(
+      'SELECT u.id AS user_id, u.name FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ? AND m.share_transactions = 1', [mem.household_id]);
+    res.json({ month: start.slice(0, 7), sharing_members: sharing, transactions: rows.map((r) => ({ ...r, amount: Number(r.amount), is_me: r.user_id === req.me.id })) });
+  } catch (err) { fail(res, err, 'ACTIVITY'); }
+});
+
+// ───────── shared budgets ─────────
+router.get('/budgets', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const month = monthStart(req.query.month);
+    if (!month) return res.status(400).json({ message: 'Invalid month. Use YYYY-MM.' });
+    const [budgets] = await db.query(
+      `SELECT hb.id, hb.category_id, hb.monthly_limit, c.name AS category_name, c.icon, c.color AS category_color
+         FROM household_budgets hb JOIN categories c ON c.id = hb.category_id WHERE hb.household_id = ? AND hb.month = ?`, [mem.household_id, month]);
+    const [members] = await db.query('SELECT u.id AS user_id, u.name FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ?', [mem.household_id]);
+    let spendRows = [];
+    if (budgets.length) {
+      [spendRows] = await db.query(
+        `SELECT t.category_id, t.user_id, SUM(t.amount) AS spent FROM transactions t
+          WHERE t.type = 'expense' AND DATE_FORMAT(t.date, '%Y-%m-01') = ?
+            AND t.user_id IN (SELECT user_id FROM household_members WHERE household_id = ?)
+            AND t.category_id IN (${budgets.map(() => '?').join(',')})
+          GROUP BY t.category_id, t.user_id`, [month, mem.household_id, ...budgets.map((b) => b.category_id)]);
+    }
+    const nameOf = new Map(members.map((m) => [m.user_id, m.name]));
+    const out = budgets.map((b) => {
+      const mine = spendRows.filter((r) => r.category_id === b.category_id);
+      const spent = mine.reduce((s, r) => s + Number(r.spent), 0);
+      const limit = Number(b.monthly_limit);
+      return {
+        id: b.id, category_id: b.category_id, category_name: b.category_name, icon: b.icon, category_color: b.category_color,
+        monthly_limit: limit, spent, percent: limit > 0 ? Math.round((spent / limit) * 100) : 0,
+        by_member: mine.map((r) => ({ user_id: r.user_id, name: nameOf.get(r.user_id) || 'Member', spent: Number(r.spent), is_me: r.user_id === req.me.id })).sort((a, z) => z.spent - a.spent),
+      };
+    }).sort((a, z) => z.percent - a.percent);
+    res.json({ month: month.slice(0, 7), budgets: out, total_limit: out.reduce((s, b) => s + b.monthly_limit, 0), total_spent: out.reduce((s, b) => s + b.spent, 0) });
+  } catch (err) { fail(res, err, 'BUDGETS'); }
+});
+
+router.post('/budgets', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const month = monthStart(req.body?.month);
+    const limit = Number(req.body?.monthly_limit);
+    if (!month) return res.status(400).json({ message: 'Invalid month. Use YYYY-MM.' });
+    const categoryId = Number(req.body?.category_id);
+    if (!Number.isInteger(categoryId) || categoryId <= 0) return res.status(400).json({ message: 'Choose a category.' });
+    if (!(limit > 0) || limit > 99999999) return res.status(400).json({ message: 'Budget limit must be greater than 0.' });
+    const [cat] = await db.query('SELECT id FROM categories WHERE id = ? AND user_id IS NULL', [categoryId]);
+    if (!cat.length) return res.status(400).json({ message: 'Shared budgets can only use the standard categories, because custom categories are private.' });
+    await db.query(
+      `INSERT INTO household_budgets (household_id, category_id, monthly_limit, month, created_by) VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit)`, [mem.household_id, cat[0].id, limit, month, req.me.id]);
+    try { await hh.checkHouseholdBudgets(req.me.id); } catch (e) { console.error('Shared alert check failed:', e.message); }
+    res.json({ message: 'Shared budget saved' });
+  } catch (err) { fail(res, err, 'SAVE BUDGET'); }
+});
+
+router.post('/budgets/copy', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const from = req.body?.from && monthStart(req.body.from), to = req.body?.to && monthStart(req.body.to);
+    if (!from || !to) return res.status(400).json({ message: 'Invalid month. Use YYYY-MM.' });
+    if (from === to) return res.status(400).json({ message: 'Choose two different months.' });
+    const [r] = await db.query(
+      `INSERT IGNORE INTO household_budgets (household_id, category_id, monthly_limit, month, created_by)
+       SELECT household_id, category_id, monthly_limit, ?, ? FROM household_budgets WHERE household_id = ? AND month = ?`, [to, req.me.id, mem.household_id, from]);
+    res.json({ copied: r.affectedRows, message: r.affectedRows ? `Copied ${r.affectedRows} shared budget${r.affectedRows === 1 ? '' : 's'}` : 'Nothing new to copy' });
+  } catch (err) { fail(res, err, 'COPY'); }
+});
+
+router.delete('/budgets/:id', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const [r] = await db.query('DELETE FROM household_budgets WHERE id = ? AND household_id = ?', [Number(req.params.id) || 0, mem.household_id]);
+    if (!r.affectedRows) return res.status(404).json({ message: 'Shared budget not found.' });
+    res.json({ message: 'Shared budget removed' });
+  } catch (err) { fail(res, err, 'DELETE BUDGET'); }
+});
+
+// ───────── split expenses ─────────
+const MAX_EXPENSES = 2000;
+const MAX_PAISE = 999999999; // about ₹ 99 lakh per entry
+const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
+const moneyToPaise = (v) => {
+  if (typeof v !== 'number' && typeof v !== 'string') return null;
+  if (typeof v === 'string' && !/^\d+(\.\d{1,2})?$/.test(v.trim())) return null;
+  const p = split.toPaise(v);
+  return Number.isInteger(p) && p >= 1 && p <= MAX_PAISE ? p : null;
+};
+const posInt = (v) => { const n = typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : v; return Number.isInteger(n) && n > 0 ? n : null; };
+
+async function currentMembers(householdId) {
+  const [rows] = await db.query(
+    'SELECT u.id AS user_id, u.name FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ? ORDER BY m.joined_at, m.id', [householdId]);
+  return rows;
+}
+
+router.get('/expenses', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const start = monthStart(req.query.month);
+    if (!start) return res.status(400).json({ message: 'Month must look like 2026-10.' });
+    const members = await currentMembers(mem.household_id);
+    const nameNow = new Map(members.map((m) => [m.user_id, m.name]));
+    const nm = (id, snap) => nameNow.get(id) || snap;
+
+    const [expenses] = await db.query(
+      `SELECT id, title, amount_paise, DATE_FORMAT(expense_date, '%Y-%m-%d') AS date, paid_by, paid_by_name, created_by
+         FROM household_expenses WHERE household_id = ? ORDER BY expense_date DESC, id DESC`, [mem.household_id]);
+    const ids = expenses.map((e) => e.id);
+    const [shares] = ids.length
+      ? await db.query('SELECT expense_id, user_id, user_name, share_paise FROM household_expense_shares WHERE expense_id IN (?)', [ids]) : [[]];
+    const [settlements] = await db.query(
+      `SELECT id, from_user, from_name, to_user, to_name, amount_paise, DATE_FORMAT(settled_on, '%Y-%m-%d') AS date, created_by
+         FROM household_settlements WHERE household_id = ? ORDER BY settled_on DESC, id DESC`, [mem.household_id]);
+
+    const bal = split.balances(expenses, shares, settlements);
+    const balances = [...bal.values()].map((b) => ({
+      user_id: b.user_id, name: nm(b.user_id, b.name), balance: split.toRupees(b.paise),
+      former: !nameNow.has(b.user_id), is_me: b.user_id === req.me.id,
+    }));
+    for (const m of members) if (!bal.has(m.user_id)) balances.push({ user_id: m.user_id, name: m.name, balance: 0, former: false, is_me: m.user_id === req.me.id });
+    balances.sort((a, b) => Number(a.former) - Number(b.former) || b.balance - a.balance);
+
+    const suggestions = split.suggest(bal, new Set(members.map((m) => m.user_id))).map((t) => ({
+      from_user: t.from_user, from_name: nm(t.from_user, t.from_name), to_user: t.to_user, to_name: nm(t.to_user, t.to_name), amount: split.toRupees(t.amount_paise),
+    }));
+
+    const byExpense = new Map();
+    for (const sh of shares) { if (!byExpense.has(sh.expense_id)) byExpense.set(sh.expense_id, []); byExpense.get(sh.expense_id).push({ user_id: sh.user_id, name: nm(sh.user_id, sh.user_name), share: split.toRupees(sh.share_paise) }); }
+    const canAct = (...who) => mem.role === 'owner' || who.includes(req.me.id);
+    const inMonth = expenses.filter((e) => e.date.slice(0, 7) === start.slice(0, 7));
+    res.json({
+      month: start.slice(0, 7),
+      members: members.map((m) => ({ user_id: m.user_id, name: m.name, is_me: m.user_id === req.me.id })),
+      balances, suggestions,
+      month_total: split.toRupees(inMonth.reduce((t, e) => t + Number(e.amount_paise), 0)),
+      expenses: inMonth.slice(0, 200).map((e) => ({
+        id: e.id, title: e.title, amount: split.toRupees(e.amount_paise), date: e.date, paid_by: e.paid_by, paid_by_name: nm(e.paid_by, e.paid_by_name),
+        shares: byExpense.get(e.id) || [], can_delete: canAct(e.created_by, e.paid_by),
+      })),
+      settlements: settlements.slice(0, 20).map((t) => ({
+        id: t.id, from_user: t.from_user, from_name: nm(t.from_user, t.from_name), to_user: t.to_user, to_name: nm(t.to_user, t.to_name),
+        amount: split.toRupees(t.amount_paise), date: t.date, can_delete: canAct(t.from_user, t.to_user, t.created_by),
+      })),
+    });
+  } catch (err) { fail(res, err, 'EXPENSES'); }
+});
+
+router.post('/expenses', async (req, res) => {
+  let conn;
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const b = req.body || {};
+    const title = clean(b.title);
+    if (!title || title.length > 100) return res.status(400).json({ message: 'Give the expense a title of up to 100 characters.' });
+    const paise = moneyToPaise(b.amount);
+    if (paise === null) return res.status(400).json({ message: 'Enter an amount above 0 with at most 2 decimals.' });
+    if (!isDate(b.date)) return res.status(400).json({ message: 'Choose a valid date.' });
+
+    const members = await currentMembers(mem.household_id);
+    const byId = new Map(members.map((m) => [m.user_id, m.name]));
+    const paidBy = b.paid_by === undefined || b.paid_by === null || b.paid_by === '' ? req.me.id : posInt(b.paid_by);
+    if (!paidBy || !byId.has(paidBy)) return res.status(400).json({ message: 'Choose who paid from the household members.' });
+    let among = members.map((m) => m.user_id);
+    if (b.split_among !== undefined && b.split_among !== null) {
+      if (!Array.isArray(b.split_among) || b.split_among.length === 0) return res.status(400).json({ message: 'Choose at least one person to split between.' });
+      among = [...new Set(b.split_among.map(posInt))];
+      if (among.some((id) => !id || !byId.has(id))) return res.status(400).json({ message: 'You can only split between people in the household.' });
+    }
+    among.sort((x, y) => x - y);
+    const parts = split.splitEqual(paise, among);
+
+    conn = await db.getConnection(); await conn.beginTransaction();
+    const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM household_expenses WHERE household_id = ? FOR UPDATE', [mem.household_id]);
+    if (Number(n) >= MAX_EXPENSES) { await conn.rollback(); return res.status(400).json({ message: `A household can hold up to ${MAX_EXPENSES} expenses. Delete old ones first.` }); }
+    const [r] = await conn.query(
+      'INSERT INTO household_expenses (household_id, title, amount_paise, expense_date, paid_by, paid_by_name, created_by) VALUES (?,?,?,?,?,?,?)',
+      [mem.household_id, title, paise, b.date, paidBy, byId.get(paidBy), req.me.id]);
+    await conn.query('INSERT INTO household_expense_shares (expense_id, user_id, user_name, share_paise) VALUES ?',
+      [parts.map((p) => [r.insertId, p.id, byId.get(p.id), p.share])]);
+    await conn.commit();
+    res.status(201).json({ id: r.insertId, message: 'Expense added' });
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* ignore */ } }
+    fail(res, err, 'ADD EXPENSE');
+  } finally { if (conn) conn.release(); }
+});
+
+router.delete('/expenses/:id', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const id = posInt(req.params.id);
+    if (!id) return res.status(404).json({ message: 'Expense not found.' });
+    const [rows] = await db.query('SELECT id, paid_by, created_by FROM household_expenses WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Expense not found.' });
+    if (!(mem.role === 'owner' || rows[0].created_by === req.me.id || rows[0].paid_by === req.me.id)) {
+      return res.status(403).json({ message: 'Only the person who added or paid it, or the owner, can delete this expense.' });
+    }
+    await db.query('DELETE FROM household_expenses WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    res.json({ message: 'Expense deleted' });
+  } catch (err) { fail(res, err, 'DELETE EXPENSE'); }
+});
+
+router.post('/settlements', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const b = req.body || {};
+    const hasTo = b.to_user !== undefined && b.to_user !== null, hasFrom = b.from_user !== undefined && b.from_user !== null;
+    if (hasTo === hasFrom) return res.status(400).json({ message: 'Say who paid whom.' });
+    const other = posInt(hasTo ? b.to_user : b.from_user);
+    const members = await currentMembers(mem.household_id);
+    const byId = new Map(members.map((m) => [m.user_id, m.name]));
+    if (!other || other === req.me.id || !byId.has(other)) return res.status(400).json({ message: 'Choose another member of the household.' });
+    const paise = moneyToPaise(b.amount);
+    if (paise === null) return res.status(400).json({ message: 'Enter an amount above 0 with at most 2 decimals.' });
+    const date = b.date === undefined || b.date === null || b.date === '' ? new Date().toISOString().slice(0, 10) : b.date;
+    if (!isDate(date)) return res.status(400).json({ message: 'Choose a valid date.' });
+    const from = hasTo ? req.me.id : other, to = hasTo ? other : req.me.id;
+    const [r] = await db.query(
+      'INSERT INTO household_settlements (household_id, from_user, from_name, to_user, to_name, amount_paise, settled_on, created_by) VALUES (?,?,?,?,?,?,?,?)',
+      [mem.household_id, from, byId.get(from), to, byId.get(to), paise, date, req.me.id]);
+    res.status(201).json({ id: r.insertId, message: 'Payment recorded' });
+  } catch (err) { fail(res, err, 'ADD SETTLEMENT'); }
+});
+
+router.delete('/settlements/:id', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const id = posInt(req.params.id);
+    if (!id) return res.status(404).json({ message: 'Payment not found.' });
+    const [rows] = await db.query('SELECT id, from_user, to_user, created_by FROM household_settlements WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Payment not found.' });
+    if (!(mem.role === 'owner' || [rows[0].from_user, rows[0].to_user, rows[0].created_by].includes(req.me.id))) {
+      return res.status(403).json({ message: 'Only the two people involved, or the owner, can undo this payment.' });
+    }
+    await db.query('DELETE FROM household_settlements WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    res.json({ message: 'Payment removed' });
+  } catch (err) { fail(res, err, 'DELETE SETTLEMENT'); }
+});
+
+
+module.exports = router;

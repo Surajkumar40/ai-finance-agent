@@ -8,7 +8,7 @@ const shift = (ym, delta) => {
 };
 const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 const r1 = (n) => Math.round(n * 10) / 10;
-const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const currencySvc = require('./currency');
 const num = (v) => Number(v || 0);
 
 const grade = (s) => (s >= 80 ? 'Excellent' : s >= 60 ? 'Good' : s >= 40 ? 'Fair' : 'Needs work');
@@ -24,6 +24,7 @@ async function sums(uid, ym) {
 
 // Score out of 100 from 5 parts: savings rate 30, budgets 25, spending trend 20, safety net 15, tracking habit 10
 async function computeHealth(uid) {
+  const inr = await currencySvc.forUser(uid);
   const now = new Date();
   const month = monthOf(now);
   const cur = await sums(uid, month);
