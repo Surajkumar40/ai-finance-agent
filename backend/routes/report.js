@@ -162,5 +162,110 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// ───────── yearly report ─────────
+// Pure function (no database).
+//   rows      per month and type: [{ m: 1..12, type, total, n }]
+//   cats      expense totals per category: [{ category_id, name, icon, color, total, n }]
+//   top       biggest single expenses: [{ id, title, amount, date, category_name }]
+//   prevRows  same shape as rows, for the year before (only totals are used)
+function buildYear({ year, today, rows, cats, top, prevRows, currencyCode }) {
+  const fmt = currency.formatter(currencyCode);
+  const inr = (n) => fmt(Math.round(Number(n)));
+  const thisYear = Number(today.slice(0, 4)), thisMonthNo = Number(today.slice(5, 7));
+  const monthsDone = year < thisYear ? 12 : year === thisYear ? thisMonthNo : 0; // months that have started
+
+  const months = Array.from({ length: 12 }, (_, i) => ({ month: `${year}-${pad(i + 1)}`, income: 0, expenses: 0, net: 0, txCount: 0 }));
+  for (const r of rows) {
+    const mo = months[Number(r.m) - 1]; if (!mo) continue;
+    if (r.type === 'income') mo.income += Number(r.total); else if (r.type === 'expense') mo.expenses += Number(r.total);
+    mo.txCount += Number(r.n);
+  }
+  for (const mo of months) { mo.income = round2(mo.income); mo.expenses = round2(mo.expenses); mo.net = round2(mo.income - mo.expenses); }
+
+  const income = round2(months.reduce((t, x) => t + x.income, 0)), expenses = round2(months.reduce((t, x) => t + x.expenses, 0));
+  const net = round2(income - expenses);
+  const sumPrev = (type) => round2(prevRows.filter((r) => r.type === type).reduce((t, r) => t + Number(r.total), 0));
+  const pIncome = sumPrev('income'), pExpenses = sumPrev('expense');
+  const totals = {
+    income, expenses, net, txCount: months.reduce((t, x) => t + x.txCount, 0),
+    savingsRate: income > 0 ? Math.round((net / income) * 100) : null,
+    avgMonthlySpend: monthsDone > 0 ? round2(expenses / monthsDone) : 0,
+    avgMonthlyIncome: monthsDone > 0 ? round2(income / monthsDone) : 0,
+  };
+  const previous = { income: pIncome, expenses: pExpenses, net: round2(pIncome - pExpenses) };
+  const change = { incomePct: pct(income, pIncome), expensesPct: pct(expenses, pExpenses) };
+
+  const active = months.filter((x, i) => i < monthsDone && x.txCount > 0);
+  const highestSpend = active.length ? active.reduce((a, b) => (b.expenses > a.expenses ? b : a)) : null;
+  const lowestSpend = active.length ? active.reduce((a, b) => (b.expenses < a.expenses ? b : a)) : null;
+  const bestSaving = active.length ? active.reduce((a, b) => (b.net > a.net ? b : a)) : null;
+
+  const categories = cats.map((c) => ({
+    id: c.category_id ?? 0, name: c.name || 'Uncategorized', icon: c.icon || '🏷️', color: c.color || '#94a3b8',
+    amount: round2(Number(c.total)), count: Number(c.n),
+    share: expenses > 0 ? Math.round((Number(c.total) / expenses) * 100) : 0,
+  })).sort((a, b) => b.amount - a.amount);
+
+  const topExpenses = top.map((t) => ({
+    id: t.id, title: t.title, amount: round2(Number(t.amount)), date: ymdOf(t.date), category: t.category_name || 'Uncategorized',
+  }));
+
+  const highlights = [];
+  if (!totals.txCount) {
+    highlights.push(`No transactions were recorded in ${year}.`);
+  } else {
+    highlights.push(`You spent ${inr(expenses)} and earned ${inr(income)} in ${year}.`);
+    highlights.push(net >= 0
+      ? `You saved ${inr(net)}${totals.savingsRate !== null ? `, ${totals.savingsRate}% of your income` : ''}.`
+      : `You spent ${inr(-net)} more than you earned.`);
+    if (monthsDone > 0) highlights.push(`On average you spent ${inr(totals.avgMonthlySpend)} a month.`);
+    if (highestSpend && active.length > 1) highlights.push(`Your most expensive month was ${highestSpend.month} (${inr(highestSpend.expenses)}).`);
+    if (categories.length) highlights.push(`Biggest category: ${categories[0].name} at ${inr(categories[0].amount)} (${categories[0].share}% of spending).`);
+    if (change.expensesPct !== null) {
+      const p = change.expensesPct;
+      highlights.push(p === 0 ? `Spending was the same as in ${year - 1}.`
+        : p > 500 ? `Spending was far higher than in ${year - 1} (${inr(pExpenses)}).`
+        : `Spending was ${Math.abs(p)}% ${p > 0 ? 'higher' : 'lower'} than in ${year - 1}.`);
+    }
+  }
+
+  return {
+    year, monthsDone, totals, previous, change, months, categories, topExpenses, highlights,
+    best: { highestSpend: highestSpend && highestSpend.month, lowestSpend: lowestSpend && lowestSpend.month, bestSaving: bestSaving && bestSaving.month },
+    currency: currencyCode || currency.DEFAULT,
+  };
+}
+
+router.get('/year', auth, async (req, res) => {
+  const userId = req.user.id;
+  const today = userToday(req.query.today);
+  const raw = req.query.year === undefined || req.query.year === '' ? today.slice(0, 4) : req.query.year;
+  if (typeof raw !== 'string' || !/^\d{4}$/.test(raw)) return res.status(400).json({ message: 'Invalid year. Use YYYY, like 2026.' });
+  const year = Number(raw);
+  if (year < 1990 || year > 2100) return res.status(400).json({ message: 'Invalid year.' });
+  const from = `${year}-01-01`, to = `${year + 1}-01-01`, pFrom = `${year - 1}-01-01`;
+  try {
+    const monthly = (a, b) => db.query(
+      `SELECT MONTH(date) AS m, type, SUM(amount) AS total, COUNT(*) AS n FROM transactions
+        WHERE user_id = ? AND date >= ? AND date < ? GROUP BY MONTH(date), type`, [userId, a, b]);
+    const [[rows], [prevRows], [cats], [top]] = await Promise.all([
+      monthly(from, to), monthly(pFrom, from),
+      db.query(
+        `SELECT t.category_id, c.name, c.icon, c.color, SUM(t.amount) AS total, COUNT(*) AS n
+           FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+          WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date < ? GROUP BY t.category_id, c.name, c.icon, c.color`, [userId, from, to]),
+      db.query(
+        `SELECT t.id, t.title, t.amount, t.date, c.name AS category_name FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+          WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date < ? ORDER BY t.amount DESC, t.id DESC LIMIT 5`, [userId, from, to]),
+    ]);
+    res.json(buildYear({ year, today, rows, cats, top, prevRows, currencyCode: await currency.codeOf(userId) }));
+  } catch (err) {
+    console.error('YEAR REPORT ERROR:', err.message);
+    res.status(500).json({ message: 'Could not build the yearly report' });
+  }
+});
+
+router.buildYear = buildYear;
+
 router.buildReport = buildReport;
 module.exports = router;

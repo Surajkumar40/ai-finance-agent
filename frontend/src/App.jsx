@@ -8,6 +8,7 @@ import SignupPage from "./pages/SignupPage";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
+const YearlyReportPage = lazy(() => import("./pages/YearlyReportPage"));
 const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const RecurringPage = lazy(() => import("./pages/RecurringPage"));
 const GoalsPage = lazy(() => import("./pages/GoalsPage"));
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/budgets" element={<ProtectedRoute><BudgetsPage /></ProtectedRoute>} />
           <Route path="/forecast" element={<ProtectedRoute><ForecastPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/reports/year" element={<ProtectedRoute><YearlyReportPage /></ProtectedRoute>} />
           <Route path="/simulator" element={<ProtectedRoute><SimulatorPage /></ProtectedRoute>} />
           <Route path="/shared" element={<ProtectedRoute><SharedPage /></ProtectedRoute>} />
           <Route path="/recurring" element={<ProtectedRoute><RecurringPage /></ProtectedRoute>} />

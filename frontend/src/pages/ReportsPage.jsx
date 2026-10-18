@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
@@ -133,7 +134,7 @@ export default function ReportsPage() {
         <div className="flex flex-wrap items-center gap-3 mb-6 print:hidden">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Monthly report</h1>
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">A summary of your month that you can save as a PDF.</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">A summary of your month that you can save as a PDF. <Link to="/reports/year" className="text-brand-500 hover:underline">Yearly report</Link></p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <div className="flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#16161f] overflow-hidden">
