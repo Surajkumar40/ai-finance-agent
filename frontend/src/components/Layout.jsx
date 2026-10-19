@@ -42,6 +42,11 @@ const navItems = [
       <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>
     </svg>
   )},
+  { to: "/networth",     label: "Net worth",    icon: (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path d="M3 17l5-5 4 4 8-9M15 7h5v5"/>
+    </svg>
+  )},
   { to: "/simulator",    label: "What-if",      icon: (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>

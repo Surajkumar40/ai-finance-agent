@@ -156,6 +156,8 @@ router.get('/export', auth, async (req, res) => {
       `SELECT r.title, r.amount, r.type, c.name AS category, r.frequency, r.next_due, r.is_active
          FROM recurring_transactions r LEFT JOIN categories c ON c.id = r.category_id WHERE r.user_id = ? ORDER BY r.id`, [uid]);
     const [categories] = await db.query('SELECT name, icon, color FROM categories WHERE user_id = ? ORDER BY name', [uid]);
+    await require('./networth').ensureTables();
+    const [netWorth] = await db.query('SELECT name, kind, category, balance, updated_at FROM net_worth_items WHERE user_id = ? ORDER BY kind, id', [uid]);
     res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="finance-data-${stamp}.json"` });
     res.send(JSON.stringify({
       exportedAt: new Date().toISOString(),
@@ -165,6 +167,7 @@ router.get('/export', auth, async (req, res) => {
       goals: goals.map((g) => ({ ...g, target_amount: Number(g.target_amount), saved_amount: Number(g.saved_amount), target_date: g.target_date ? ymd(g.target_date) : null })),
       recurring: recurring.map((r) => ({ ...r, amount: Number(r.amount), next_due: ymd(r.next_due), is_active: !!r.is_active })),
       customCategories: categories,
+      netWorth: netWorth.map((n) => ({ ...n, balance: Number(n.balance), updated_at: n.updated_at ? ymd(n.updated_at) : null })),
     }, null, 2));
   } catch (err) { console.error('EXPORT ERROR:', err.message); res.status(500).json({ message: 'Could not prepare your data' }); }
 });

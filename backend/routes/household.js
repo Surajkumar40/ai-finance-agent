@@ -13,6 +13,11 @@
 //   POST   /join                   accept through the link        { token }
 //   PATCH  /me/sharing             choose whether my transactions are visible to the household { share: true|false }
 //   GET    /activity?month=        transactions of members who chose to share (never notes)
+//   GET    /expenses?month=        shared expenses of the month, everyone's balance, and who should pay whom
+//   POST   /expenses               add a shared expense   { title, amount, date, paid_by?, split_among? }
+//   DELETE /expenses/:id           delete one (who added it, who paid it, or the owner)
+//   POST   /settlements            record a payment between two members { to_user | from_user, amount, date? }
+//   DELETE /settlements/:id        undo one (either person, or the owner)
 //   GET    /budgets?month=YYYY-MM  shared budgets with spending, and each member's share (totals only)
 //   POST   /budgets                set a shared limit            { category_id, monthly_limit, month? }
 //   POST   /budgets/copy           copy limits to another month  { from, to }
@@ -24,6 +29,7 @@ const db = require('../config/db');
 const auth = require('../middleware/auth');
 const mailer = require('../services/mailer');
 const hh = require('../services/household');
+const split = require('../services/split');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -372,5 +378,168 @@ router.delete('/budgets/:id', async (req, res) => {
     res.json({ message: 'Shared budget removed' });
   } catch (err) { fail(res, err, 'DELETE BUDGET'); }
 });
+
+// ───────── split expenses ─────────
+const MAX_EXPENSES = 2000;
+const MAX_PAISE = 999999999; // about ₹ 99 lakh per entry
+const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
+const moneyToPaise = (v) => {
+  if (typeof v !== 'number' && typeof v !== 'string') return null;
+  if (typeof v === 'string' && !/^\d+(\.\d{1,2})?$/.test(v.trim())) return null;
+  const p = split.toPaise(v);
+  return Number.isInteger(p) && p >= 1 && p <= MAX_PAISE ? p : null;
+};
+const posInt = (v) => { const n = typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : v; return Number.isInteger(n) && n > 0 ? n : null; };
+
+async function currentMembers(householdId) {
+  const [rows] = await db.query(
+    'SELECT u.id AS user_id, u.name FROM household_members m JOIN users u ON u.id = m.user_id WHERE m.household_id = ? ORDER BY m.joined_at, m.id', [householdId]);
+  return rows;
+}
+
+router.get('/expenses', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const start = monthStart(req.query.month);
+    if (!start) return res.status(400).json({ message: 'Month must look like 2026-10.' });
+    const members = await currentMembers(mem.household_id);
+    const nameNow = new Map(members.map((m) => [m.user_id, m.name]));
+    const nm = (id, snap) => nameNow.get(id) || snap;
+
+    const [expenses] = await db.query(
+      `SELECT id, title, amount_paise, DATE_FORMAT(expense_date, '%Y-%m-%d') AS date, paid_by, paid_by_name, created_by
+         FROM household_expenses WHERE household_id = ? ORDER BY expense_date DESC, id DESC`, [mem.household_id]);
+    const ids = expenses.map((e) => e.id);
+    const [shares] = ids.length
+      ? await db.query('SELECT expense_id, user_id, user_name, share_paise FROM household_expense_shares WHERE expense_id IN (?)', [ids]) : [[]];
+    const [settlements] = await db.query(
+      `SELECT id, from_user, from_name, to_user, to_name, amount_paise, DATE_FORMAT(settled_on, '%Y-%m-%d') AS date, created_by
+         FROM household_settlements WHERE household_id = ? ORDER BY settled_on DESC, id DESC`, [mem.household_id]);
+
+    const bal = split.balances(expenses, shares, settlements);
+    const balances = [...bal.values()].map((b) => ({
+      user_id: b.user_id, name: nm(b.user_id, b.name), balance: split.toRupees(b.paise),
+      former: !nameNow.has(b.user_id), is_me: b.user_id === req.me.id,
+    }));
+    for (const m of members) if (!bal.has(m.user_id)) balances.push({ user_id: m.user_id, name: m.name, balance: 0, former: false, is_me: m.user_id === req.me.id });
+    balances.sort((a, b) => Number(a.former) - Number(b.former) || b.balance - a.balance);
+
+    const suggestions = split.suggest(bal, new Set(members.map((m) => m.user_id))).map((t) => ({
+      from_user: t.from_user, from_name: nm(t.from_user, t.from_name), to_user: t.to_user, to_name: nm(t.to_user, t.to_name), amount: split.toRupees(t.amount_paise),
+    }));
+
+    const byExpense = new Map();
+    for (const sh of shares) { if (!byExpense.has(sh.expense_id)) byExpense.set(sh.expense_id, []); byExpense.get(sh.expense_id).push({ user_id: sh.user_id, name: nm(sh.user_id, sh.user_name), share: split.toRupees(sh.share_paise) }); }
+    const canAct = (...who) => mem.role === 'owner' || who.includes(req.me.id);
+    const inMonth = expenses.filter((e) => e.date.slice(0, 7) === start.slice(0, 7));
+    res.json({
+      month: start.slice(0, 7),
+      members: members.map((m) => ({ user_id: m.user_id, name: m.name, is_me: m.user_id === req.me.id })),
+      balances, suggestions,
+      month_total: split.toRupees(inMonth.reduce((t, e) => t + Number(e.amount_paise), 0)),
+      expenses: inMonth.slice(0, 200).map((e) => ({
+        id: e.id, title: e.title, amount: split.toRupees(e.amount_paise), date: e.date, paid_by: e.paid_by, paid_by_name: nm(e.paid_by, e.paid_by_name),
+        shares: byExpense.get(e.id) || [], can_delete: canAct(e.created_by, e.paid_by),
+      })),
+      settlements: settlements.slice(0, 20).map((t) => ({
+        id: t.id, from_user: t.from_user, from_name: nm(t.from_user, t.from_name), to_user: t.to_user, to_name: nm(t.to_user, t.to_name),
+        amount: split.toRupees(t.amount_paise), date: t.date, can_delete: canAct(t.from_user, t.to_user, t.created_by),
+      })),
+    });
+  } catch (err) { fail(res, err, 'EXPENSES'); }
+});
+
+router.post('/expenses', async (req, res) => {
+  let conn;
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const b = req.body || {};
+    const title = clean(b.title);
+    if (!title || title.length > 100) return res.status(400).json({ message: 'Give the expense a title of up to 100 characters.' });
+    const paise = moneyToPaise(b.amount);
+    if (paise === null) return res.status(400).json({ message: 'Enter an amount above 0 with at most 2 decimals.' });
+    if (!isDate(b.date)) return res.status(400).json({ message: 'Choose a valid date.' });
+
+    const members = await currentMembers(mem.household_id);
+    const byId = new Map(members.map((m) => [m.user_id, m.name]));
+    const paidBy = b.paid_by === undefined || b.paid_by === null || b.paid_by === '' ? req.me.id : posInt(b.paid_by);
+    if (!paidBy || !byId.has(paidBy)) return res.status(400).json({ message: 'Choose who paid from the household members.' });
+    let among = members.map((m) => m.user_id);
+    if (b.split_among !== undefined && b.split_among !== null) {
+      if (!Array.isArray(b.split_among) || b.split_among.length === 0) return res.status(400).json({ message: 'Choose at least one person to split between.' });
+      among = [...new Set(b.split_among.map(posInt))];
+      if (among.some((id) => !id || !byId.has(id))) return res.status(400).json({ message: 'You can only split between people in the household.' });
+    }
+    among.sort((x, y) => x - y);
+    const parts = split.splitEqual(paise, among);
+
+    conn = await db.getConnection(); await conn.beginTransaction();
+    const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM household_expenses WHERE household_id = ? FOR UPDATE', [mem.household_id]);
+    if (Number(n) >= MAX_EXPENSES) { await conn.rollback(); return res.status(400).json({ message: `A household can hold up to ${MAX_EXPENSES} expenses. Delete old ones first.` }); }
+    const [r] = await conn.query(
+      'INSERT INTO household_expenses (household_id, title, amount_paise, expense_date, paid_by, paid_by_name, created_by) VALUES (?,?,?,?,?,?,?)',
+      [mem.household_id, title, paise, b.date, paidBy, byId.get(paidBy), req.me.id]);
+    await conn.query('INSERT INTO household_expense_shares (expense_id, user_id, user_name, share_paise) VALUES ?',
+      [parts.map((p) => [r.insertId, p.id, byId.get(p.id), p.share])]);
+    await conn.commit();
+    res.status(201).json({ id: r.insertId, message: 'Expense added' });
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* ignore */ } }
+    fail(res, err, 'ADD EXPENSE');
+  } finally { if (conn) conn.release(); }
+});
+
+router.delete('/expenses/:id', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const id = posInt(req.params.id);
+    if (!id) return res.status(404).json({ message: 'Expense not found.' });
+    const [rows] = await db.query('SELECT id, paid_by, created_by FROM household_expenses WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Expense not found.' });
+    if (!(mem.role === 'owner' || rows[0].created_by === req.me.id || rows[0].paid_by === req.me.id)) {
+      return res.status(403).json({ message: 'Only the person who added or paid it, or the owner, can delete this expense.' });
+    }
+    await db.query('DELETE FROM household_expenses WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    res.json({ message: 'Expense deleted' });
+  } catch (err) { fail(res, err, 'DELETE EXPENSE'); }
+});
+
+router.post('/settlements', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const b = req.body || {};
+    const hasTo = b.to_user !== undefined && b.to_user !== null, hasFrom = b.from_user !== undefined && b.from_user !== null;
+    if (hasTo === hasFrom) return res.status(400).json({ message: 'Say who paid whom.' });
+    const other = posInt(hasTo ? b.to_user : b.from_user);
+    const members = await currentMembers(mem.household_id);
+    const byId = new Map(members.map((m) => [m.user_id, m.name]));
+    if (!other || other === req.me.id || !byId.has(other)) return res.status(400).json({ message: 'Choose another member of the household.' });
+    const paise = moneyToPaise(b.amount);
+    if (paise === null) return res.status(400).json({ message: 'Enter an amount above 0 with at most 2 decimals.' });
+    const date = b.date === undefined || b.date === null || b.date === '' ? new Date().toISOString().slice(0, 10) : b.date;
+    if (!isDate(date)) return res.status(400).json({ message: 'Choose a valid date.' });
+    const from = hasTo ? req.me.id : other, to = hasTo ? other : req.me.id;
+    const [r] = await db.query(
+      'INSERT INTO household_settlements (household_id, from_user, from_name, to_user, to_name, amount_paise, settled_on, created_by) VALUES (?,?,?,?,?,?,?,?)',
+      [mem.household_id, from, byId.get(from), to, byId.get(to), paise, date, req.me.id]);
+    res.status(201).json({ id: r.insertId, message: 'Payment recorded' });
+  } catch (err) { fail(res, err, 'ADD SETTLEMENT'); }
+});
+
+router.delete('/settlements/:id', async (req, res) => {
+  try {
+    const mem = await needMember(req, res); if (!mem) return;
+    const id = posInt(req.params.id);
+    if (!id) return res.status(404).json({ message: 'Payment not found.' });
+    const [rows] = await db.query('SELECT id, from_user, to_user, created_by FROM household_settlements WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Payment not found.' });
+    if (!(mem.role === 'owner' || [rows[0].from_user, rows[0].to_user, rows[0].created_by].includes(req.me.id))) {
+      return res.status(403).json({ message: 'Only the two people involved, or the owner, can undo this payment.' });
+    }
+    await db.query('DELETE FROM household_settlements WHERE id = ? AND household_id = ?', [id, mem.household_id]);
+    res.json({ message: 'Payment removed' });
+  } catch (err) { fail(res, err, 'DELETE SETTLEMENT'); }
+});
+
 
 module.exports = router;
