@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#6d5dfc"><title>Offline · Finance AI</title>
+<style>
+  :root{color-scheme:light dark}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f8fafc;color:#0f172a;padding:24px}
+  @media (prefers-color-scheme:dark){body{background:#0d0d14;color:#e2e8f0}.card{background:#16161f!important;border-color:#ffffff14!important}p{color:#94a3b8!important}}
+  .card{max-width:360px;text-align:center;background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:32px 24px}
+  img{width:64px;height:64px;border-radius:16px}
+  h1{font-size:20px;margin:16px 0 8px}p{margin:0 0 20px;color:#64748b;font-size:14px;line-height:1.5}
+  button{background:#6d5dfc;color:#fff;border:0;border-radius:12px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer}
+</style></head>
+<body><div class="card"><img src="/icons/icon-192.png" alt=""><h1>You are offline</h1>
+<p>Finance AI needs the internet to load your latest numbers. Check your connection and try again. Nothing you saved is lost.</p>
+<button onclick="location.reload()">Try again</button></div>
+<script>addEventListener('online',()=>location.reload())</script></body></html>
