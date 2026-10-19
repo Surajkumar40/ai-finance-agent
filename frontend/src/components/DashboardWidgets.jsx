@@ -4,7 +4,7 @@ import api from "../api/axios";
 import { localToday } from "../utils/voiceParse";
 import { fmt as money, useCurrency } from "../utils/currency";
 
-// Three small cards under the numbers: bills coming up, savings goals, and the household's shared budgets.
+// Small cards under the numbers: bills coming up, savings goals, net worth, and the household's shared budgets.
 // Each one loads on its own, so if one fails the others still show.
 const fmt = (n) => money(n, 0);
 const parseYMD = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -98,6 +98,48 @@ function Goals() {
   );
 }
 
+const loadNetWorth = () => api.get("/networth", { params: { today: localToday() } }).then((r) => r.data);
+
+// A tiny line of the net worth over the last months. Needs at least two points that differ in time, not in value.
+function Spark({ points }) {
+  if (points.length < 2) return null;
+  const w = 120, h = 32, lo = Math.min(...points), hi = Math.max(...points), span = hi - lo || 1;
+  const xy = points.map((v, i) => `${((i / (points.length - 1)) * w).toFixed(1)},${(h - 3 - ((v - lo) / span) * (h - 6)).toFixed(1)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-8 text-brand-500" role="img" aria-label="Net worth over the last months" preserveAspectRatio="none">
+      <polyline points={xy} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function NetWorth() {
+  const s = useLoad(loadNetWorth);
+  if (s.status === "error" && s.code === 403) return null; // demo accounts cannot track net worth
+  return (
+    <Card title="Net worth" to="/networth" linkText="Details">
+      {s.status === "loading" && <Muted>Loading…</Muted>}
+      {s.status === "error" && <Muted>Could not load your net worth.</Muted>}
+      {s.status === "ready" && s.data.items.length === 0 && <Muted>Add what you own and what you owe, like bank balances, investments and loans, to see your total here.</Muted>}
+      {s.status === "ready" && s.data.items.length > 0 && (() => {
+        const { totals, change, trend } = s.data;
+        const up = change && change.amount > 0, down = change && change.amount < 0;
+        return (
+          <>
+            <span className={`text-2xl font-bold font-mono ${totals.net < 0 ? "text-rose-500" : "text-slate-900 dark:text-white"}`}>{fmt(totals.net)}</span>
+            {change && (
+              <p className={`text-xs mt-1 ${up ? "text-emerald-500" : down ? "text-rose-500" : "text-slate-400"}`}>
+                {up ? "▲ " : down ? "▼ " : ""}{change.amount === 0 ? "No change" : fmt(Math.abs(change.amount))} since last month
+              </p>
+            )}
+            <div className="mt-3"><Spark points={trend.map((t) => t.net)} /></div>
+            <p className="text-xs text-slate-400 mt-2">{fmt(totals.assets)} owned · {fmt(totals.debts)} owed</p>
+          </>
+        );
+      })()}
+    </Card>
+  );
+}
+
 const loadShared = async () => {
   const ov = (await api.get("/household")).data;
   if (!ov.household) return { none: true, invites: ov.my_invites?.length || 0 };
@@ -146,9 +188,10 @@ function Shared() {
 export default function DashboardWidgets() {
   useCurrency();
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
       <Bills />
       <Goals />
+      <NetWorth />
       <Shared />
     </div>
   );
