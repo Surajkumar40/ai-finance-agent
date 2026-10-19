@@ -36,6 +36,12 @@ export default function RecurringPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [found, setFound] = useState([]);
+  const [busyKey, setBusyKey] = useState("");
+
+  // Repeating payments spotted in the history. A failure here only hides the card.
+  const loadFound = () => api.get("/recurring/suggestions", { params: { today: today() } })
+    .then(r => setFound(r.data.suggestions || [])).catch(() => setFound([]));
 
   const load = async () => {
     try {
@@ -49,7 +55,24 @@ export default function RecurringPage() {
       .then(([r, c]) => { setItems(r.data); setCategories(c.data); })
       .catch(() => setNotice("Could not load recurring transactions"))
       .finally(() => setLoaded(true));
+    loadFound();
   }, []);
+
+  const addFound = async (f) => {
+    setBusyKey(f.key);
+    try {
+      await api.post("/recurring", { title: f.title, amount: f.amount, type: f.type, frequency: f.frequency, next_due: f.next_due, category_id: f.category_id || null, notes: "" });
+      setNotice(`Added "${f.title}". Next one on ${niceDate(f.next_due)}.`);
+      await Promise.all([load(), loadFound()]);
+    } catch (err) { setNotice(err.response?.data?.message || "Could not add it"); }
+    finally { setBusyKey(""); }
+  };
+  const hideFound = async (f) => {
+    setBusyKey(f.key);
+    try { await api.post("/recurring/suggestions/dismiss", { key: f.key }); setFound(list => list.filter(x => x.key !== f.key)); }
+    catch { setNotice("Could not hide it"); }
+    finally { setBusyKey(""); }
+  };
 
   const save = async () => {
     if (!form.title.trim() || !(Number(form.amount) > 0) || !form.next_due) {
@@ -111,6 +134,30 @@ export default function RecurringPage() {
             <span>{notice}</span>
             <button onClick={() => setNotice("")} className="text-xs opacity-70 hover:opacity-100">✕</button>
           </div>
+        )}
+
+        {found.length > 0 && (
+          <section className="card p-5" aria-label="Repeating payments we found">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">We found {found.length === 1 ? "a payment that repeats" : `${found.length} payments that repeat`}</h2>
+            <p className="text-xs text-slate-400 mt-0.5 mb-3">Based on your past transactions. Add one and it is entered for you from the next due date on.</p>
+            <ul className="divide-y divide-slate-100 dark:divide-white/5">
+              {found.map(f => (
+                <li key={f.key} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{f.title}</p>
+                    <p className="text-xs text-slate-400">{FREQ[f.frequency]} · seen {f.occurrences} times · next {niceDate(f.next_due)}{f.category_name ? ` · ${f.category_name}` : ""}</p>
+                  </div>
+                  <span className={`font-mono font-semibold text-sm whitespace-nowrap ${f.type === "income" ? "text-emerald-500" : "text-slate-700 dark:text-slate-200"}`}>{f.type === "income" ? "+" : ""}{fmt(f.amount)}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => addFound(f)} disabled={busyKey === f.key} aria-label={`Add ${f.title} as recurring`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-50 transition-all">Add</button>
+                    <button onClick={() => hideFound(f)} disabled={busyKey === f.key} aria-label={`Hide ${f.title}`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-50 transition-all">Not this one</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

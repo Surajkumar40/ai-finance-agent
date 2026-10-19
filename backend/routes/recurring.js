@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const db = require('../config/db');
 const { processDue, ymd } = require('../services/recurring');
+const { detect, LOOKBACK_DAYS } = require('../services/recurringDetect');
 
 const FREQ = ['daily', 'weekly', 'monthly', 'yearly'];
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s));
@@ -57,6 +58,65 @@ router.get('/', auth, async (req, res) => {
   } catch (err) {
     console.error('RECURRING LIST ERROR:', err.message);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// ---- Suggestions: payments that already repeat in the history ----
+const MAX_DISMISSED = 200;
+let tablesReady;
+function ensureDismissTable() {
+  if (!tablesReady) {
+    tablesReady = db.query(`
+      CREATE TABLE IF NOT EXISTS recurring_dismissed (
+        user_id INT NOT NULL,
+        item_key VARCHAR(220) NOT NULL,
+        PRIMARY KEY (user_id, item_key),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) CHARACTER SET utf8mb4`).catch((e) => { tablesReady = null; throw e; });
+  }
+  return tablesReady;
+}
+// The browser sends its own date; only dates within 3 days of the server's are trusted.
+function userToday(q) {
+  if (typeof q === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(q)) {
+    const t = new Date(q + 'T00:00:00Z');
+    if (!isNaN(t) && t.toISOString().slice(0, 10) === q && Math.abs(t - Date.now()) < 3 * 86400000) return q;
+  }
+  return ymd(new Date());
+}
+
+// GET /api/recurring/suggestions
+router.get('/suggestions', auth, async (req, res) => {
+  try {
+    await ensureDismissTable();
+    const today = userToday(req.query.today);
+    const [tx] = await db.query(
+      `SELECT t.title, t.amount, t.type, t.category_id, t.date, t.is_recurring, c.name AS category_name
+         FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+        WHERE t.user_id = ? AND t.date >= DATE_SUB(?, INTERVAL ? DAY) AND t.date <= ?
+        ORDER BY t.date DESC LIMIT 5000`, [req.user.id, today, LOOKBACK_DAYS, today]);
+    const [existing] = await db.query('SELECT title, type FROM recurring_transactions WHERE user_id = ?', [req.user.id]);
+    const [gone] = await db.query('SELECT item_key FROM recurring_dismissed WHERE user_id = ?', [req.user.id]);
+    res.json({ suggestions: detect({ transactions: tx, existing, dismissed: gone.map((r) => r.item_key), today }) });
+  } catch (err) {
+    console.error('RECURRING SUGGEST ERROR:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/recurring/suggestions/dismiss  { key }   "not this one"
+router.post('/suggestions/dismiss', auth, async (req, res) => {
+  try {
+    const key = req.body && req.body.key;
+    if (typeof key !== 'string' || !/^(income|expense)\|.{1,200}$/su.test(key)) return res.status(400).json({ message: 'Invalid suggestion' });
+    await ensureDismissTable();
+    const [[{ n }]] = await db.query('SELECT COUNT(*) AS n FROM recurring_dismissed WHERE user_id = ?', [req.user.id]);
+    if (Number(n) >= MAX_DISMISSED) return res.status(400).json({ message: 'Too many hidden suggestions.' });
+    await db.query('INSERT IGNORE INTO recurring_dismissed (user_id, item_key) VALUES (?, ?)', [req.user.id, key]);
+    res.json({ message: 'Hidden' });
+  } catch (err) {
+    console.error('RECURRING DISMISS ERROR:', err.message);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
