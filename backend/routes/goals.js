@@ -6,6 +6,7 @@ const db = require('../config/db');
 const num = (v) => Number(v || 0);
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s));
 const currency = require('../services/currency');
+const { projectGoal, WINDOW_DAYS } = require('../services/goalPace');
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (v) => {
   if (!v) return null;
@@ -22,7 +23,7 @@ function shape(g) {
     remaining: Math.max(0, target - saved),
     target_date: ymd(g.target_date),
     completed: !!g.completed_at,
-    days_left: null, monthly_needed: null,
+    days_left: null, monthly_needed: null, pace: null,
   };
   if (out.target_date && !out.completed) {
     const t = new Date(); t.setHours(0, 0, 0, 0);
@@ -71,13 +72,56 @@ async function syncCompletion(uid, id) {
   }
 }
 
+// Every deposit and withdrawal is kept, so the page can show a history and work out the pace.
+let tablesReady;
+function ensureTables() {
+  if (!tablesReady) {
+    tablesReady = db.query(`
+      CREATE TABLE IF NOT EXISTS goal_contributions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        goal_id INT NOT NULL,
+        user_id INT NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        recorded_on DATE NOT NULL,
+        INDEX idx_gc_goal (goal_id, recorded_on),
+        INDEX idx_gc_user (user_id),
+        FOREIGN KEY (goal_id) REFERENCES savings_goals(id) ON DELETE CASCADE
+      ) CHARACTER SET utf8mb4`).catch((e) => { tablesReady = null; throw e; });
+  }
+  return tablesReady;
+}
+// The browser sends its own date; only dates within 3 days of the server's are trusted.
+function userToday(q) {
+  if (typeof q === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(q)) {
+    const t = new Date(q + 'T00:00:00Z');
+    if (!isNaN(t) && t.toISOString().slice(0, 10) === q && Math.abs(t - Date.now()) < 3 * 86400000) return q;
+  }
+  return ymd(new Date());
+}
+
 // GET /api/goals
 router.get('/', auth, async (req, res) => {
   try {
+    await ensureTables();
+    const today = userToday(req.query.today);
     const [rows] = await db.query(
       'SELECT * FROM savings_goals WHERE user_id = ? ORDER BY (completed_at IS NOT NULL), target_date IS NULL, target_date, id DESC',
       [req.user.id]);
-    res.json(rows.map(shape));
+    const goals = rows.map(shape);
+    if (goals.some((g) => !g.completed)) {
+      const [recent] = await db.query(
+        'SELECT goal_id, amount, recorded_on FROM goal_contributions WHERE user_id = ? AND recorded_on > DATE_SUB(?, INTERVAL ? DAY) AND recorded_on <= ?',
+        [req.user.id, today, WINDOW_DAYS, today]);
+      const [firsts] = await db.query('SELECT goal_id, MIN(recorded_on) AS first_on FROM goal_contributions WHERE user_id = ? GROUP BY goal_id', [req.user.id]);
+      const firstOf = new Map(firsts.map((f) => [f.goal_id, ymd(f.first_on)]));
+      for (const g of goals) {
+        g.pace = g.completed ? null : projectGoal({
+          contributions: recent.filter((c) => c.goal_id === g.id).map((c) => ({ amount: c.amount, on: ymd(c.recorded_on) })),
+          firstOn: firstOf.get(g.id), remaining: g.remaining, today, targetDate: g.target_date,
+        });
+      }
+    }
+    res.json(goals);
   } catch (err) {
     console.error('GOALS LIST ERROR:', err.message);
     res.status(500).json({ message: err.message });
@@ -118,15 +162,44 @@ router.put('/:id', auth, async (req, res) => {
 router.post('/:id/contribute', auth, async (req, res) => {
   const amount = Number(req.body.amount);
   if (!amount || !isFinite(amount)) return res.status(400).json({ message: 'Enter an amount (not zero)' });
+  let conn;
   try {
-    const [r] = await db.query(
-      'UPDATE savings_goals SET saved_amount = GREATEST(0, saved_amount + ?) WHERE id = ? AND user_id = ?',
-      [amount, req.params.id, req.user.id]);
-    if (!r.affectedRows) return res.status(404).json({ message: 'Not found' });
+    await ensureTables();
+    conn = await db.getConnection(); await conn.beginTransaction();
+    const [g] = await conn.query('SELECT saved_amount FROM savings_goals WHERE id = ? AND user_id = ? FOR UPDATE', [req.params.id, req.user.id]);
+    if (!g.length) { await conn.rollback(); return res.status(404).json({ message: 'Not found' }); }
+    const before = num(g[0].saved_amount);
+    const after = Math.max(0, Math.round((before + amount) * 100) / 100);
+    await conn.query('UPDATE savings_goals SET saved_amount = ? WHERE id = ? AND user_id = ?', [after, req.params.id, req.user.id]);
+    const applied = Math.round((after - before) * 100) / 100; // a withdrawal cannot take it below zero
+    if (applied !== 0) {
+      await conn.query('INSERT INTO goal_contributions (goal_id, user_id, amount, recorded_on) VALUES (?,?,?,?)', [req.params.id, req.user.id, applied, userToday(req.body.today)]);
+    }
+    await conn.commit();
     await syncCompletion(req.user.id, req.params.id);
     const [rows] = await db.query('SELECT * FROM savings_goals WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     res.json(shape(rows[0]));
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* ignore */ } }
+    console.error('GOAL CONTRIBUTE ERROR:', err.message);
+    res.status(500).json({ message: err.message });
+  } finally { if (conn) conn.release(); }
+});
+
+// GET /api/goals/:id/history — the latest deposits and withdrawals of one goal
+router.get('/:id/history', auth, async (req, res) => {
+  try {
+    await ensureTables();
+    const [own] = await db.query('SELECT id FROM savings_goals WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (!own.length) return res.status(404).json({ message: 'Not found' });
+    const [rows] = await db.query(
+      'SELECT id, amount, recorded_on FROM goal_contributions WHERE goal_id = ? AND user_id = ? ORDER BY recorded_on DESC, id DESC LIMIT 30',
+      [req.params.id, req.user.id]);
+    res.json(rows.map((r) => ({ id: r.id, amount: num(r.amount), on: ymd(r.recorded_on) })));
+  } catch (err) {
+    console.error('GOAL HISTORY ERROR:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // DELETE /api/goals/:id

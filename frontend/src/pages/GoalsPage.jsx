@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { fmt as money, useCurrency, symbol } from "../utils/currency";
+import { localToday } from "../utils/voiceParse";
 
 const ICONS = ["🎯", "💻", "🏠", "🚗", "✈️", "📱", "🎓", "💍", "🏍️", "🛡️"];
 const EMPTY = { name: "", icon: "🎯", target_amount: "", saved_amount: "", target_date: "" };
@@ -11,6 +12,21 @@ const niceDate = s => {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
+
+const monthYear = s => {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+};
+const lateText = n => (n < 14 ? `${n} day${n === 1 ? "" : "s"}` : n < 60 ? `${Math.round(n / 7)} weeks` : `${Math.round(n / 30.44)} months`);
+// One sentence about when the goal will be reached at the pace of the last 3 months (the server decides which case applies).
+function paceText(p) {
+  const rate = `${fmt(p.per_month)} a month`;
+  if (p.status === "stalled") return "You took out as much as you added over the last 3 months, so there is no finish date yet.";
+  if (p.status === "far_off") return `At your current pace (${rate}) this is more than 10 years away. Adding more each month brings it closer.`;
+  if (p.status === "behind") return `At your pace (${rate}) you reach it around ${monthYear(p.finish_date)}, about ${lateText(p.days_late)} after your target date.`;
+  if (p.status === "on_track") return `At your pace (${rate}) you reach it around ${monthYear(p.finish_date)}, in time for your target date.`;
+  return `At your pace (${rate}) you reach it around ${monthYear(p.finish_date)}.`;
+}
 
 const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
   bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10
@@ -41,14 +57,23 @@ export default function GoalsPage() {
   const [money, setMoney] = useState(null);    // { goal, amount }
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [histOpen, setHistOpen] = useState(null); // id of the goal whose history is showing
+  const [hist, setHist] = useState(null);         // null = loading, array = rows, "error"
 
   const load = async () => {
-    try { const { data } = await api.get("/goals"); setGoals(data); } catch { setError("Could not load goals"); }
+    try { const { data } = await api.get("/goals", { params: { today: localToday() } }); setGoals(data); } catch { setError("Could not load goals"); }
     finally { setLoaded(true); }
   };
   useEffect(() => {
-    api.get("/goals").then(res => setGoals(res.data)).catch(() => setError("Could not load goals")).finally(() => setLoaded(true));
+    api.get("/goals", { params: { today: localToday() } }).then(res => setGoals(res.data)).catch(() => setError("Could not load goals")).finally(() => setLoaded(true));
   }, []);
+
+  const toggleHistory = async g => {
+    if (histOpen === g.id) { setHistOpen(null); return; }
+    setHistOpen(g.id); setHist(null);
+    try { const { data } = await api.get(`/goals/${g.id}/history`); setHist(data); }
+    catch { setHist("error"); }
+  };
 
   const openNew = () => { setForm(EMPTY); setEditId(null); setError(""); };
   const openEdit = g => {
@@ -73,8 +98,8 @@ export default function GoalsPage() {
     if (!(amount > 0)) { setError("Enter an amount greater than 0."); return; }
     setBusy(true); setError("");
     try {
-      await api.post(`/goals/${money.goal.id}/contribute`, { amount: sign * amount });
-      setMoney(null); load();
+      await api.post(`/goals/${money.goal.id}/contribute`, { amount: sign * amount, today: localToday() });
+      setMoney(null); setHistOpen(null); load();
     } catch (err) { setError(err.response?.data?.message || "Something went wrong"); }
     finally { setBusy(false); }
   };
@@ -161,12 +186,38 @@ export default function GoalsPage() {
                   {!g.completed && g.monthly_needed !== null && (
                     <p className="text-[11px] text-slate-400 mt-2">Save about <span className="font-semibold text-brand-500">{fmt(g.monthly_needed)}</span> a month to get there on time</p>
                   )}
+                  {!g.completed && g.pace && (
+                    <p className={`text-[11px] mt-1.5 ${g.pace.status === "behind" || g.pace.status === "stalled" || g.pace.status === "far_off" ? "text-amber-500" : g.pace.status === "on_track" ? "text-emerald-500" : "text-slate-400"}`}>
+                      {paceText(g.pace)}
+                    </p>
+                  )}
                 </div>
 
                 <button onClick={() => { setMoney({ goal: g, amount: "" }); setError(""); }}
                   className="mt-4 w-full py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-brand-400 hover:text-brand-500 transition-all">
                   + Add or withdraw money
                 </button>
+                <button onClick={() => toggleHistory(g)} aria-expanded={histOpen === g.id}
+                  className="mt-2 w-full text-[11px] font-medium text-slate-400 hover:text-brand-500 transition-colors">
+                  {histOpen === g.id ? "Hide history" : "Show history"}
+                </button>
+                {histOpen === g.id && (
+                  <div className="mt-2" aria-label={`History of ${g.name}`}>
+                    {hist === null && <p className="text-xs text-slate-400">Loading…</p>}
+                    {hist === "error" && <p className="text-xs text-red-500">Could not load the history.</p>}
+                    {Array.isArray(hist) && hist.length === 0 && <p className="text-xs text-slate-400">Nothing added or withdrawn yet. New deposits show up here.</p>}
+                    {Array.isArray(hist) && hist.length > 0 && (
+                      <ul className="divide-y divide-slate-100 dark:divide-white/5">
+                        {hist.map(h => (
+                          <li key={h.id} className="flex items-center justify-between py-1.5 text-xs">
+                            <span className="text-slate-400">{niceDate(h.on)}</span>
+                            <span className={`font-mono font-semibold ${h.amount >= 0 ? "text-emerald-500" : "text-red-400"}`}>{h.amount >= 0 ? "+" : "-"}{fmt(Math.abs(h.amount))}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
