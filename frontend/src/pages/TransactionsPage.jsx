@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { downloadCSV } from "../utils/csv";
@@ -31,6 +31,7 @@ async function fileToDataUrl(file, maxSide = 1600, quality = 0.82) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+const MAX_BULK = 500; // the most the server changes in one go
 const PAGE = 50; // rows drawn at a time, so a long history does not slow the page down
 const RANGES = [
   { id: "all", label: "All time" }, { id: "month", label: "This month" }, { id: "last", label: "Last month" },
@@ -61,6 +62,13 @@ export default function TransactionsPage() {
   const [filter, setFilter] = useState("all");
   const [range, setRange] = useState("all");
   const [limit, setLimit] = useState(PAGE); // rows shown; "Show more" adds another page
+  const [selected, setSelected] = useState(() => new Set()); // ids ticked for a bulk action
+  const [bulkAsk, setBulkAsk] = useState(false); // "Delete N? Yes / No" is showing
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+  const allBox = useRef(null);
+  // Changing what is shown also clears the ticks, so a bulk action never touches rows you can no longer see.
+  const resetView = () => { setLimit(PAGE); setSelected(new Set()); setBulkAsk(false); };
   const [scanning, setScanning] = useState(false);
 
   const fetchAll = async () => {
@@ -140,6 +148,36 @@ export default function TransactionsPage() {
   const sumOf = type => filtered.filter(t => t.type === type).reduce((s, t) => s + parseFloat(t.amount), 0);
   const isFiltered = filter !== "all" || range !== "all" || q !== "";
 
+  const pickedIds = transactions.filter(t => selected.has(t.id)).map(t => t.id); // ticks of rows that still exist
+  const pickedCount = pickedIds.length;
+  const shownIds = shown.map(t => t.id);
+  const allShownPicked = shownIds.length > 0 && shownIds.every(id => selected.has(id));
+  const toggleOne = id => setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleShown = () => setSelected(prev => { const n = new Set(prev); if (allShownPicked) shownIds.forEach(id => n.delete(id)); else shownIds.forEach(id => n.add(id)); return n; });
+  const pickAllMatching = () => setSelected(new Set(filtered.slice(0, MAX_BULK).map(t => t.id)));
+  const clearPicked = () => { setSelected(new Set()); setBulkAsk(false); };
+  useEffect(() => { if (allBox.current) allBox.current.indeterminate = pickedCount > 0 && !allShownPicked; }, [pickedCount, allShownPicked]);
+
+  const bulkDelete = async () => {
+    setBulkBusy(true); setBulkMsg("");
+    try {
+      const { data } = await api.post("/transactions/bulk/delete", { ids: pickedIds });
+      setBulkMsg(`Deleted ${data.deleted} transaction${data.deleted === 1 ? "" : "s"}.`);
+      clearPicked(); await fetchAll();
+    } catch (err) { setBulkMsg(err.response?.data?.message || "Could not delete them."); }
+    finally { setBulkBusy(false); }
+  };
+  const bulkCategory = async value => {
+    if (value === "") return;
+    setBulkBusy(true); setBulkMsg("");
+    try {
+      const { data } = await api.post("/transactions/bulk/category", { ids: pickedIds, category_id: value === "none" ? null : Number(value) });
+      setBulkMsg(`Changed the category of ${data.updated} transaction${data.updated === 1 ? "" : "s"}.`);
+      clearPicked(); await fetchAll();
+    } catch (err) { setBulkMsg(err.response?.data?.message || "Could not change the category."); }
+    finally { setBulkBusy(false); }
+  };
+
   const totalIncome = transactions.filter(t => t.type === "income").reduce((s, t) => s + parseFloat(t.amount), 0);
   const totalExpense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + parseFloat(t.amount), 0);
 
@@ -195,7 +233,7 @@ export default function TransactionsPage() {
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            <input value={search} onChange={e => { setSearch(e.target.value); setLimit(PAGE); }}
+            <input value={search} onChange={e => { setSearch(e.target.value); resetView(); }}
               placeholder="Search transactions…"
               className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm bg-white dark:bg-[#16161f]
                          border border-slate-200 dark:border-white/10
@@ -204,7 +242,7 @@ export default function TransactionsPage() {
           </div>
           <div className="flex gap-2">
             {["all","income","expense"].map(f => (
-              <button key={f} onClick={() => { setFilter(f); setLimit(PAGE); }}
+              <button key={f} onClick={() => { setFilter(f); resetView(); }}
                 className={`px-4 py-2.5 rounded-xl text-xs font-semibold capitalize transition-all ${
                   filter === f
                     ? "bg-brand-500 text-white shadow-lg shadow-brand-500/25"
@@ -214,7 +252,7 @@ export default function TransactionsPage() {
               </button>
             ))}
           </div>
-          <select value={range} onChange={e => { setRange(e.target.value); setLimit(PAGE); }} aria-label="Show transactions from"
+          <select value={range} onChange={e => { setRange(e.target.value); resetView(); }} aria-label="Show transactions from"
             className="px-3 py-2.5 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
             {RANGES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
@@ -224,6 +262,42 @@ export default function TransactionsPage() {
           <p className="text-xs text-slate-400" aria-live="polite">
             {filtered.length} of {transactions.length} shown · income <span className="font-mono text-emerald-500">{fmt(sumOf("income"))}</span> · expenses <span className="font-mono text-red-400">{fmt(sumOf("expense"))}</span>
           </p>
+        )}
+
+        {bulkMsg && (
+          <div role="status" className="flex items-center justify-between px-4 py-3 rounded-xl bg-brand-50 dark:bg-brand-500/10 border border-brand-100 dark:border-brand-500/20 text-sm text-brand-600 dark:text-brand-400">
+            <span>{bulkMsg}</span><button onClick={() => setBulkMsg("")} aria-label="Dismiss" className="text-xs opacity-70 hover:opacity-100">✕</button>
+          </div>
+        )}
+
+        {pickedCount > 0 && (
+          <div role="region" aria-label="Bulk actions" className="sticky top-2 z-10 flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl bg-white dark:bg-[#1c1c28] border border-brand-200 dark:border-brand-500/30 shadow-lg">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{pickedCount} selected</span>
+            {allShownPicked && pickedCount < Math.min(filtered.length, MAX_BULK) && (
+              <button onClick={pickAllMatching} className="text-xs font-semibold text-brand-500 hover:text-brand-600">
+                Select {filtered.length > MAX_BULK ? `the first ${MAX_BULK}` : `all ${filtered.length}`} that match
+              </button>
+            )}
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              <select aria-label="Change category of the selected" value="" disabled={bulkBusy} onChange={e => bulkCategory(e.target.value)}
+                className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300">
+                <option value="">Change category…</option>
+                <option value="none">No category</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {bulkAsk ? (
+                <span className="flex items-center gap-2 text-xs text-red-500">
+                  Delete {pickedCount}? This cannot be undone.
+                  <button onClick={bulkDelete} disabled={bulkBusy} className="px-3 py-1.5 rounded-lg font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50">Yes</button>
+                  <button onClick={() => setBulkAsk(false)} className="px-3 py-1.5 rounded-lg font-semibold border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300">No</button>
+                </span>
+              ) : (
+                <button onClick={() => setBulkAsk(true)} disabled={bulkBusy}
+                  className="px-3 py-2 rounded-lg text-xs font-semibold text-red-500 border border-red-200 dark:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50">Delete</button>
+              )}
+              <button onClick={clearPicked} className="px-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-200">Clear</button>
+            </div>
+          </div>
         )}
 
         {/* Table */}
@@ -242,6 +316,10 @@ export default function TransactionsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-white/5">
+                    <th className="pl-5 pr-0 py-3.5 w-8">
+                      <input ref={allBox} type="checkbox" checked={allShownPicked} onChange={toggleShown} aria-label="Select all shown transactions"
+                        className="w-4 h-4 rounded accent-brand-500 cursor-pointer" />
+                    </th>
                     {["Title", "Category", "Date", "Type", "Amount", ""].map(h => (
                       <th key={h} className="text-left px-5 py-3.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                         {h}
@@ -251,7 +329,11 @@ export default function TransactionsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-white/5">
                   {shown.map(t => (
-                    <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
+                    <tr key={t.id} className={`hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group ${selected.has(t.id) ? "bg-brand-50/60 dark:bg-brand-500/5" : ""}`}>
+                      <td className="pl-5 pr-0 py-3.5 w-8">
+                        <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleOne(t.id)} aria-label={`Select ${t.title}`}
+                          className="w-4 h-4 rounded accent-brand-500 cursor-pointer" />
+                      </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${

@@ -121,4 +121,54 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
+// ---- Bulk actions: change or remove many transactions at once ----
+const MAX_BULK = 500;
+// Returns the clean list of ids, or null when the list is missing, empty, too long or has something that is not an id.
+function cleanIds(v) {
+  if (!Array.isArray(v) || v.length === 0 || v.length > MAX_BULK) return null;
+  const out = new Set();
+  for (const x of v) {
+    const n = typeof x === "string" && /^\d{1,10}$/.test(x) ? Number(x) : x;
+    if (!Number.isInteger(n) || n <= 0) return null;
+    out.add(n);
+  }
+  return [...out];
+}
+
+// POST /api/transactions/bulk/delete   { ids: [1, 2, 3] }
+router.post("/bulk/delete", auth, async (req, res) => {
+  try {
+    const ids = cleanIds(req.body && req.body.ids);
+    if (!ids) return res.status(400).json({ message: `Choose between 1 and ${MAX_BULK} transactions.` });
+    const [r] = await db.query("DELETE FROM transactions WHERE user_id = ? AND id IN (?)", [req.user.id, ids]);
+    res.json({ deleted: r.affectedRows, message: "Transactions deleted" });
+  } catch (err) {
+    console.error("Transaction bulk delete error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// POST /api/transactions/bulk/category   { ids: [1, 2, 3], category_id: 4 | null }
+router.post("/bulk/category", auth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const ids = cleanIds(b.ids);
+    if (!ids) return res.status(400).json({ message: `Choose between 1 and ${MAX_BULK} transactions.` });
+    let categoryId = null;
+    if (b.category_id !== undefined && b.category_id !== null && b.category_id !== "") {
+      categoryId = Number(b.category_id);
+      if (!Number.isInteger(categoryId) || categoryId <= 0) return res.status(400).json({ message: "Choose a valid category" });
+      // only the standard categories or this person's own ones
+      const [ok] = await db.query("SELECT id FROM categories WHERE id = ? AND (user_id IS NULL OR user_id = ?)", [categoryId, req.user.id]);
+      if (!ok.length) return res.status(400).json({ message: "Choose a valid category" });
+    }
+    const [r] = await db.query("UPDATE transactions SET category_id = ? WHERE user_id = ? AND id IN (?)", [categoryId, req.user.id, ids]);
+    try { await checkBudgets(req.user.id); } catch (e) { console.error("Alert check failed:", e.message); }
+    res.json({ updated: r.affectedRows, message: "Category changed" });
+  } catch (err) {
+    console.error("Transaction bulk category error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 module.exports = router;
