@@ -43,6 +43,7 @@ export default function BudgetsPage() {
   const [month, setMonth] = useState(thisMonth());
   const [budgets, setBudgets] = useState([]);
   const [unbudgeted, setUnbudgeted] = useState([]);
+  const [ideas, setIdeas] = useState({ months: 0, suggestions: [] }); // suggested limits from the last 3 months
   const [categories, setCategories] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -65,6 +66,10 @@ export default function BudgetsPage() {
       setUnbudgeted(u.data);
       setCategories(c.data);
       setError("");
+      // Suggestions are a nicety: if they fail, the rest of the page still works.
+      api.get("/budgets/suggestions", { params: { month } })
+        .then(r => { if (id === reqId.current) setIdeas(r.data); })
+        .catch(() => { if (id === reqId.current) setIdeas({ months: 0, suggestions: [] }); });
     } catch {
       if (id === reqId.current) setError("Could not load budgets. Please try again.");
     } finally {
@@ -112,6 +117,25 @@ export default function BudgetsPage() {
     if (!confirm(`Remove the ${b.category_name} budget for ${monthLabel(month)}?`)) return;
     try { await api.delete(`/budgets/${b.id}`); load(); }
     catch { setError("Could not delete that budget."); }
+  };
+
+  const applyIdea = async (i) => {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await api.post("/budgets", { category_id: i.category_id, monthly_limit: i.suggested, month });
+      setNotice(`${i.category_name} budget set to ${fmt(i.suggested)}.`);
+      load();
+    } catch (err) { setError(err.response?.data?.message || "Could not set that budget."); }
+    finally { setBusy(false); }
+  };
+  const applyAllIdeas = async () => {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const { data } = await api.post("/budgets/suggestions/apply", { month });
+      setNotice(`Set ${data.created} budget${data.created === 1 ? "" : "s"} for ${monthLabel(month)}. You can change any of them.`);
+      load();
+    } catch (err) { setError(err.response?.data?.message || "Could not set the budgets."); }
+    finally { setBusy(false); }
   };
 
   const copyPrevious = async () => {
@@ -286,6 +310,43 @@ export default function BudgetsPage() {
                   {busy ? "Copying…" : `Add missing budgets from ${monthLabel(shiftMonth(month, -1))}`}
                 </button>
               </div>
+            )}
+
+            {/* Suggested limits from the last months */}
+            {ideas.suggestions.length > 0 && (
+              <section className="card p-5" aria-label="Suggested budgets">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Suggested budgets</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Based on your average spending over the last {ideas.months === 1 ? "month" : `${ideas.months} months`}, rounded up a little.
+                    </p>
+                  </div>
+                  {ideas.suggestions.length > 1 && (
+                    <button onClick={applyAllIdeas} disabled={busy}
+                      className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-50 transition-all">
+                      Set all {ideas.suggestions.length}
+                    </button>
+                  )}
+                </div>
+                <ul className="space-y-2">
+                  {ideas.suggestions.map(i => (
+                    <li key={i.category_id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-base" aria-hidden>{i.icon || "💰"}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm text-slate-700 dark:text-slate-200 truncate">{i.category_name}</p>
+                          <p className="text-xs text-slate-400">you spend about {fmt(i.average)} a month</p>
+                        </div>
+                      </div>
+                      <button onClick={() => applyIdea(i)} disabled={busy} aria-label={`Set ${i.category_name} budget to ${fmt(i.suggested)}`}
+                        className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border border-brand-200 dark:border-brand-500/30 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 disabled:opacity-50 transition-all font-mono">
+                        Set {fmt(i.suggested)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
 
             {/* Spending without a budget */}
