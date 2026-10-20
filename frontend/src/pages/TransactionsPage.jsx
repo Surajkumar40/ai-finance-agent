@@ -37,6 +37,18 @@ const RANGES = [
   { id: "all", label: "All time" }, { id: "month", label: "This month" }, { id: "last", label: "Last month" },
   { id: "90", label: "Last 90 days" }, { id: "year", label: "This year" },
 ];
+const SORTS = [
+  { id: "new", label: "Newest first" }, { id: "old", label: "Oldest first" },
+  { id: "high", label: "Largest amount" }, { id: "low", label: "Smallest amount" },
+];
+// Ties always fall back to newest first, so the order is the same every time.
+const bySort = id => (a, b) => {
+  const byDate = dayOf(b.date) < dayOf(a.date) ? -1 : dayOf(b.date) > dayOf(a.date) ? 1 : b.id - a.id;
+  if (id === "old") return -byDate;
+  if (id === "high") return parseFloat(b.amount) - parseFloat(a.amount) || byDate;
+  if (id === "low") return parseFloat(a.amount) - parseFloat(b.amount) || byDate;
+  return byDate;
+};
 const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const dayOf = v => String(v).slice(0, 10);
 // [start, end) as YYYY-MM-DD text, in the visitor's own calendar
@@ -61,6 +73,8 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [range, setRange] = useState("all");
+  const [catFilter, setCatFilter] = useState("all"); // "all" | "none" (no category) | a category id
+  const [sortBy, setSortBy] = useState("new");
   const [limit, setLimit] = useState(PAGE); // rows shown; "Show more" adds another page
   const [selected, setSelected] = useState(() => new Set()); // ids ticked for a bulk action
   const [bulkAsk, setBulkAsk] = useState(false); // "Delete N? Yes / No" is showing
@@ -143,10 +157,12 @@ export default function TransactionsPage() {
   const filtered = transactions
     .filter(t => filter === "all" || t.type === filter)
     .filter(t => !from || dayOf(t.date) >= from.start && dayOf(t.date) < from.end)
-    .filter(t => !q || t.title?.toLowerCase().includes(q) || t.category_name?.toLowerCase().includes(q) || t.note?.toLowerCase().includes(q));
+    .filter(t => catFilter === "all" || (catFilter === "none" ? !t.category_id : String(t.category_id) === catFilter))
+    .filter(t => !q || t.title?.toLowerCase().includes(q) || t.category_name?.toLowerCase().includes(q) || t.note?.toLowerCase().includes(q))
+    .sort(bySort(sortBy));
   const shown = filtered.slice(0, limit);
   const sumOf = type => filtered.filter(t => t.type === type).reduce((s, t) => s + parseFloat(t.amount), 0);
-  const isFiltered = filter !== "all" || range !== "all" || q !== "";
+  const isFiltered = filter !== "all" || range !== "all" || catFilter !== "all" || q !== "";
 
   const pickedIds = transactions.filter(t => selected.has(t.id)).map(t => t.id); // ticks of rows that still exist
   const pickedCount = pickedIds.length;
@@ -256,6 +272,23 @@ export default function TransactionsPage() {
             className="px-3 py-2.5 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
             {RANGES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
+        </div>
+
+        <div className="flex flex-wrap gap-2 -mt-2">
+          <select value={catFilter} onChange={e => { setCatFilter(e.target.value); resetView(); }} aria-label="Filter by category"
+            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400 max-w-full">
+            <option value="all">All categories</option>
+            <option value="none">No category</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={sortBy} onChange={e => { setSortBy(e.target.value); resetView(); }} aria-label="Sort transactions"
+            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
+            {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+          {isFiltered && (
+            <button onClick={() => { setSearch(""); setFilter("all"); setRange("all"); setCatFilter("all"); resetView(); }}
+              className="px-3 py-2 rounded-xl text-xs font-medium text-brand-500 hover:text-brand-600">Clear filters</button>
+          )}
         </div>
 
         {isFiltered && filtered.length > 0 && (
