@@ -31,6 +31,23 @@ async function fileToDataUrl(file, maxSide = 1600, quality = 0.82) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+const PAGE = 50; // rows drawn at a time, so a long history does not slow the page down
+const RANGES = [
+  { id: "all", label: "All time" }, { id: "month", label: "This month" }, { id: "last", label: "Last month" },
+  { id: "90", label: "Last 90 days" }, { id: "year", label: "This year" },
+];
+const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const dayOf = v => String(v).slice(0, 10);
+// [start, end) as YYYY-MM-DD text, in the visitor's own calendar
+function rangeStart(id) {
+  const n = new Date(), y = n.getFullYear(), m = n.getMonth();
+  if (id === "month") return { start: ymdLocal(new Date(y, m, 1)), end: ymdLocal(new Date(y, m + 1, 1)) };
+  if (id === "last") return { start: ymdLocal(new Date(y, m - 1, 1)), end: ymdLocal(new Date(y, m, 1)) };
+  if (id === "90") return { start: ymdLocal(new Date(y, m, n.getDate() - 90)), end: ymdLocal(new Date(y, m, n.getDate() + 1)) };
+  if (id === "year") return { start: `${y}-01-01`, end: `${y + 1}-01-01` };
+  return null;
+}
+
 export default function TransactionsPage() {
   useCurrency();
   const [transactions, setTransactions] = useState([]);
@@ -42,6 +59,8 @@ export default function TransactionsPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [range, setRange] = useState("all");
+  const [limit, setLimit] = useState(PAGE); // rows shown; "Show more" adds another page
   const [scanning, setScanning] = useState(false);
 
   const fetchAll = async () => {
@@ -111,10 +130,15 @@ export default function TransactionsPage() {
 
   const fmt = (n) => money(n, 0);
 
+  const from = rangeStart(range);
+  const q = search.trim().toLowerCase();
   const filtered = transactions
     .filter(t => filter === "all" || t.type === filter)
-    .filter(t => t.title?.toLowerCase().includes(search.toLowerCase()) ||
-                 t.category_name?.toLowerCase().includes(search.toLowerCase()));
+    .filter(t => !from || dayOf(t.date) >= from.start && dayOf(t.date) < from.end)
+    .filter(t => !q || t.title?.toLowerCase().includes(q) || t.category_name?.toLowerCase().includes(q) || t.note?.toLowerCase().includes(q));
+  const shown = filtered.slice(0, limit);
+  const sumOf = type => filtered.filter(t => t.type === type).reduce((s, t) => s + parseFloat(t.amount), 0);
+  const isFiltered = filter !== "all" || range !== "all" || q !== "";
 
   const totalIncome = transactions.filter(t => t.type === "income").reduce((s, t) => s + parseFloat(t.amount), 0);
   const totalExpense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + parseFloat(t.amount), 0);
@@ -171,7 +195,7 @@ export default function TransactionsPage() {
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input value={search} onChange={e => { setSearch(e.target.value); setLimit(PAGE); }}
               placeholder="Search transactions…"
               className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm bg-white dark:bg-[#16161f]
                          border border-slate-200 dark:border-white/10
@@ -180,7 +204,7 @@ export default function TransactionsPage() {
           </div>
           <div className="flex gap-2">
             {["all","income","expense"].map(f => (
-              <button key={f} onClick={() => setFilter(f)}
+              <button key={f} onClick={() => { setFilter(f); setLimit(PAGE); }}
                 className={`px-4 py-2.5 rounded-xl text-xs font-semibold capitalize transition-all ${
                   filter === f
                     ? "bg-brand-500 text-white shadow-lg shadow-brand-500/25"
@@ -190,7 +214,17 @@ export default function TransactionsPage() {
               </button>
             ))}
           </div>
+          <select value={range} onChange={e => { setRange(e.target.value); setLimit(PAGE); }} aria-label="Show transactions from"
+            className="px-3 py-2.5 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
+            {RANGES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
         </div>
+
+        {isFiltered && filtered.length > 0 && (
+          <p className="text-xs text-slate-400" aria-live="polite">
+            {filtered.length} of {transactions.length} shown · income <span className="font-mono text-emerald-500">{fmt(sumOf("income"))}</span> · expenses <span className="font-mono text-red-400">{fmt(sumOf("expense"))}</span>
+          </p>
+        )}
 
         {/* Table */}
         <div className="bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl overflow-hidden">
@@ -216,7 +250,7 @@ export default function TransactionsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-white/5">
-                  {filtered.map(t => (
+                  {shown.map(t => (
                     <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -254,7 +288,7 @@ export default function TransactionsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
                           <button onClick={() => openEdit(t)}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium
                                        text-brand-500 bg-brand-50 dark:bg-brand-500/10
@@ -276,6 +310,15 @@ export default function TransactionsPage() {
             </div>
           )}
         </div>
+
+        {filtered.length > shown.length && (
+          <div className="flex justify-center">
+            <button onClick={() => setLimit(l => l + PAGE)}
+              className="px-5 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
+              Show more ({filtered.length - shown.length} more)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
