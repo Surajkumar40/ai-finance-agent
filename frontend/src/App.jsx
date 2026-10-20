@@ -10,6 +10,7 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const YearlyReportPage = lazy(() => import("./pages/YearlyReportPage"));
 const NetWorthPage = lazy(() => import("./pages/NetWorthPage"));
+const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
 const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const RecurringPage = lazy(() => import("./pages/RecurringPage"));
 const GoalsPage = lazy(() => import("./pages/GoalsPage"));
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/shared" element={<ProtectedRoute><SharedPage /></ProtectedRoute>} />
           <Route path="/recurring" element={<ProtectedRoute><RecurringPage /></ProtectedRoute>} />
           <Route path="/networth" element={<ProtectedRoute><NetWorthPage /></ProtectedRoute>} />
+          <Route path="/categories" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
           <Route path="/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/ai" element={<ProtectedRoute><AIChatPage /></ProtectedRoute>} />
