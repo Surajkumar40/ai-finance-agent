@@ -119,6 +119,12 @@ export default function TransactionsPage() {
     setEditId(t.id); setError(""); setShowModal(true);
   };
 
+  // Same title, amount, category and note, dated today. Saved as a new transaction.
+  const openDuplicate = (t) => {
+    setForm({ title: t.title, amount: t.amount, type: t.type, category_id: t.category_id || "", date: localToday(), note: t.note || "" });
+    setEditId(null); setError(""); setShowModal(true);
+  };
+
   // What a deleted transaction needs to be put back exactly as it was.
   const keepForUndo = t => ({ title: t.title, amount: Number(t.amount), type: t.type, category_id: t.category_id || null, date: dayOf(t.date), note: t.note || null, is_recurring: !!t.is_recurring });
   const offerUndo = (rows, text) => {
@@ -443,6 +449,12 @@ export default function TransactionsPage() {
                                        text-brand-500 bg-brand-50 dark:bg-brand-500/10
                                        hover:bg-brand-100 dark:hover:bg-brand-500/20 transition-all">
                             Edit
+                          </button>
+                          <button onClick={() => openDuplicate(t)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium
+                                       text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-white/5
+                                       hover:bg-slate-200 dark:hover:bg-white/10 transition-all">
+                            Duplicate
                           </button>
                           <button onClick={() => handleDelete(t.id)}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium
