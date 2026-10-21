@@ -51,6 +51,7 @@ const bySort = id => (a, b) => {
 };
 const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const dayOf = v => String(v).slice(0, 10);
+const showDate = v => { const [y, m, d] = dayOf(v).split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("en-IN"); }; // not new Date(text): that shifts the day west of UTC
 // [start, end) as YYYY-MM-DD text, in the visitor's own calendar
 function rangeStart(id) {
   const n = new Date(), y = n.getFullYear(), m = n.getMonth();
@@ -417,7 +418,7 @@ export default function TransactionsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-sm text-slate-500 dark:text-slate-400 font-mono">
-                        {new Date(t.date).toLocaleDateString("en-IN")}
+                        {showDate(t.date)}
                       </td>
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold capitalize ${

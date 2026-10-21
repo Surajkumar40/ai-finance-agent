@@ -13,6 +13,9 @@ import { fmt as money, useCurrency } from "../utils/currency";
 
 const COLORS = ["#7c5cfc","#10d9a0","#ffb547","#ff5e7d","#3b82f6","#f472b6","#34d399","#fb923c"];
 const fmt = (n) => money(n, 0);
+// A date arrives as plain text (2026-10-02). new Date("2026-10-02") reads it as midnight UTC, which is the day before
+// for anyone west of UTC, so build the date from its parts in the visitor's own calendar instead.
+const parseDay = (v) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v)); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(v); };
 
 function StatCard({ label, value, sub, accent, icon }) {
   return (
@@ -70,13 +73,13 @@ export default function DashboardPage() {
 
       const monthMap = {};
       txns.forEach(t => {
-        const d = new Date(t.date ?? t.created_at);
+        const d = parseDay(t.date ?? t.created_at);
         const key = d.toLocaleString("default", { month: "short", year: "2-digit" });
-        if (!monthMap[key]) monthMap[key] = { month: key, Income: 0, Expenses: 0 };
+        if (!monthMap[key]) monthMap[key] = { month: key, sortKey: d.getFullYear() * 12 + d.getMonth(), Income: 0, Expenses: 0 };
         if (t.type === "income") monthMap[key].Income += parseFloat(t.amount);
         else monthMap[key].Expenses += parseFloat(t.amount);
       });
-      setBarData(Object.values(monthMap).sort((a,b) => new Date("1 "+a.month) - new Date("1 "+b.month)).slice(-6));
+      setBarData(Object.values(monthMap).sort((a,b) => a.sortKey - b.sortKey).slice(-6));
       setRecentTxns(txns.slice(0, 5));
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -220,7 +223,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t.title}</p>
-                        <p className="text-xs text-slate-400">{t.category_name ?? "Other"} · {new Date(t.date).toLocaleDateString("en-IN")}</p>
+                        <p className="text-xs text-slate-400">{t.category_name ?? "Other"} · {parseDay(t.date).toLocaleDateString("en-IN")}</p>
                       </div>
                     </div>
                     <span className={`text-sm font-semibold font-mono ${t.type === "income" ? "text-emerald-500" : "text-red-400"}`}>
