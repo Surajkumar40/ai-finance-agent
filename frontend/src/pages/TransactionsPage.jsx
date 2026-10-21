@@ -81,6 +81,9 @@ export default function TransactionsPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState("");
   const allBox = useRef(null);
+  const [undo, setUndo] = useState(null);       // { rows, text } for the "Undo" bar after a delete
+  const undoTimer = useRef(null);
+  useEffect(() => () => clearTimeout(undoTimer.current), []);
   // Changing what is shown also clears the ticks, so a bulk action never touches rows you can no longer see.
   const resetView = () => { setLimit(PAGE); setSelected(new Set()); setBulkAsk(false); };
   const [scanning, setScanning] = useState(false);
@@ -115,10 +118,31 @@ export default function TransactionsPage() {
     setEditId(t.id); setError(""); setShowModal(true);
   };
 
+  // What a deleted transaction needs to be put back exactly as it was.
+  const keepForUndo = t => ({ title: t.title, amount: Number(t.amount), type: t.type, category_id: t.category_id || null, date: dayOf(t.date), note: t.note || null, is_recurring: !!t.is_recurring });
+  const offerUndo = (rows, text) => {
+    clearTimeout(undoTimer.current);
+    setUndo({ rows, text });
+    undoTimer.current = setTimeout(() => setUndo(null), 15000);
+  };
   const handleDelete = async (id) => {
     if (!confirm("Delete this transaction?")) return;
-    await api.delete(`/transactions/${id}`);
+    const gone = transactions.find(t => t.id === id);
+    try {
+      await api.delete(`/transactions/${id}`);
+      if (gone) offerUndo([keepForUndo(gone)], `Deleted "${gone.title}".`);
+    } catch { setBulkMsg("Could not delete it."); }
     fetchAll();
+  };
+  const doUndo = async () => {
+    if (!undo) return;
+    const { rows } = undo;
+    clearTimeout(undoTimer.current); setUndo(null);
+    try {
+      const { data } = await api.post("/transactions/bulk/restore", { rows });
+      setBulkMsg(`Restored ${data.restored} transaction${data.restored === 1 ? "" : "s"}.`);
+      await fetchAll();
+    } catch (err) { setBulkMsg(err.response?.data?.message || "Could not restore them."); }
   };
 
   const handleReceipt = async (e) => {
@@ -177,8 +201,9 @@ export default function TransactionsPage() {
   const bulkDelete = async () => {
     setBulkBusy(true); setBulkMsg("");
     try {
+      const gone = transactions.filter(t => selected.has(t.id)).map(keepForUndo);
       const { data } = await api.post("/transactions/bulk/delete", { ids: pickedIds });
-      setBulkMsg(`Deleted ${data.deleted} transaction${data.deleted === 1 ? "" : "s"}.`);
+      if (data.deleted > 0) offerUndo(gone, `Deleted ${data.deleted} transaction${data.deleted === 1 ? "" : "s"}.`);
       clearPicked(); await fetchAll();
     } catch (err) { setBulkMsg(err.response?.data?.message || "Could not delete them."); }
     finally { setBulkBusy(false); }
@@ -295,6 +320,14 @@ export default function TransactionsPage() {
           <p className="text-xs text-slate-400" aria-live="polite">
             {filtered.length} of {transactions.length} shown · income <span className="font-mono text-emerald-500">{fmt(sumOf("income"))}</span> · expenses <span className="font-mono text-red-400">{fmt(sumOf("expense"))}</span>
           </p>
+        )}
+
+        {undo && (
+          <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-4 py-3 rounded-xl bg-slate-900 text-white text-sm shadow-2xl max-w-[92vw]">
+            <span className="truncate">{undo.text}</span>
+            <button onClick={doUndo} className="font-semibold text-brand-300 hover:text-white shrink-0">Undo</button>
+            <button onClick={() => { clearTimeout(undoTimer.current); setUndo(null); }} aria-label="Dismiss" className="opacity-60 hover:opacity-100 shrink-0">✕</button>
+          </div>
         )}
 
         {bulkMsg && (

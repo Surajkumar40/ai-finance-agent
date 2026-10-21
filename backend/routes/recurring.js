@@ -147,6 +147,8 @@ router.put('/:id', auth, async (req, res) => {
   if (!keys.length) return res.status(400).json({ message: 'Nothing to update' });
   try {
     if ('category_id' in v.data && !(await categoryAllowed(v.data.category_id, req.user.id))) return res.status(400).json({ message: 'Choose a valid category' });
+    // Moving the next date into the past would add the missed payments again, so an edit may only move it forward.
+    if (v.data.next_due && v.data.next_due < userToday(req.body && req.body.today)) return res.status(400).json({ message: 'The next due date cannot be in the past.' });
     const [r] = await db.query(
       `UPDATE recurring_transactions SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ? AND user_id = ?`,
       [...keys.map((k) => v.data[k]), req.params.id, req.user.id]);

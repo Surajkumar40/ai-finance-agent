@@ -33,6 +33,8 @@ export default function RecurringPage() {
   const [loaded, setLoaded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
+  const [editId, setEditId] = useState(null);   // null = adding, an id = editing that item
+  const [origDue, setOrigDue] = useState("");   // the next due date when editing started, to see if it was changed
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -74,12 +76,27 @@ export default function RecurringPage() {
     finally { setBusyKey(""); }
   };
 
+  const openEdit = it => {
+    setForm({ title: it.title, amount: String(Number(it.amount)), type: it.type, frequency: it.frequency, category_id: it.category_id || "", next_due: it.next_due, notes: it.notes || "" });
+    setEditId(it.id); setOrigDue(it.next_due); setError(""); setShowModal(true);
+  };
+
   const save = async () => {
     if (!form.title.trim() || !(Number(form.amount) > 0) || !form.next_due) {
       setError("Title, a positive amount and a start date are required."); return;
     }
     setSaving(true); setError("");
     try {
+      if (editId) {
+        // The date is only sent when it was changed, so an item keeps the day of the month it started on.
+        const body = { title: form.title, amount: Number(form.amount), type: form.type, frequency: form.frequency, category_id: form.category_id || null };
+        if (form.next_due !== origDue) { body.next_due = form.next_due; body.today = today(); }
+        await api.put(`/recurring/${editId}`, body);
+        setShowModal(false);
+        setNotice("Saved. Payments already added stay as they are; the changes apply from the next due date.");
+        load(); loadFound();
+        return;
+      }
       const { data } = await api.post("/recurring", { ...form, amount: Number(form.amount), category_id: form.category_id || null });
       setShowModal(false);
       setNotice(data.created_now ? `Saved — ${data.created_now} transaction(s) were added right away.` : "Saved — it will be added automatically on its due date.");
@@ -122,7 +139,7 @@ export default function RecurringPage() {
               className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
               Run due now
             </button>
-            <button onClick={() => { setForm(EMPTY); setError(""); setShowModal(true); }}
+            <button onClick={() => { setForm(EMPTY); setEditId(null); setError(""); setShowModal(true); }}
               className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all shadow-lg shadow-brand-500/25">
               + Add recurring
             </button>
@@ -181,7 +198,7 @@ export default function RecurringPage() {
               <p className="text-xs text-slate-400 mt-1">Add your rent, Netflix or salary and never enter them by hand again.</p>
             </div>
           ) : items.map(it => (
-            <div key={it.id} className={`flex items-center gap-3 px-4 py-3.5 ${it.is_active ? "" : "opacity-50"}`}>
+            <div key={it.id} className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 px-4 py-3.5 ${it.is_active ? "" : "opacity-50"}`}>
               <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
                 style={{ background: (it.category_color || "#7c5cfc") + "22" }}>
                 {it.category_icon || (it.type === "income" ? "↑" : "↓")}
@@ -196,14 +213,20 @@ export default function RecurringPage() {
               <span className={`text-sm font-semibold font-mono ${it.type === "income" ? "text-emerald-500" : "text-red-400"}`}>
                 {it.type === "income" ? "+" : "-"}{fmt(it.amount)}
               </span>
-              <button onClick={() => toggle(it)} title={it.is_active ? "Pause" : "Resume"}
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-brand-400 hover:text-brand-500 transition-all">
-                {it.is_active ? "Pause" : "Resume"}
-              </button>
-              <button onClick={() => remove(it)} title="Delete"
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end pl-12 sm:pl-0">
+                <button onClick={() => openEdit(it)} aria-label={`Edit ${it.title}`}
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-brand-400 hover:text-brand-500 transition-all">
+                  Edit
+                </button>
+                <button onClick={() => toggle(it)} title={it.is_active ? "Pause" : "Resume"}
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-brand-400 hover:text-brand-500 transition-all">
+                  {it.is_active ? "Pause" : "Resume"}
+                </button>
+                <button onClick={() => remove(it)} title="Delete"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -213,7 +236,7 @@ export default function RecurringPage() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/5">
-              <h3 className="font-semibold text-slate-900 dark:text-white">Add recurring transaction</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">{editId ? "Edit recurring transaction" : "Add recurring transaction"}</h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">✕</button>
             </div>
             <div className="px-6 py-5 space-y-4">
@@ -251,9 +274,11 @@ export default function RecurringPage() {
                 </div>
               </div>
               <div>
-                <label className={labelClass}>First due date</label>
-                <input type="date" value={form.next_due} onChange={e => setForm({ ...form, next_due: e.target.value })} className={inputClass} />
-                <p className="text-[11px] text-slate-400 mt-1.5">Today or an earlier date is added immediately (missed months are caught up).</p>
+                <label className={labelClass}>{editId ? "Next due date" : "First due date"}</label>
+                <input type="date" value={form.next_due} min={editId ? today() : undefined} onChange={e => setForm({ ...form, next_due: e.target.value })} className={inputClass} />
+                <p className="text-[11px] text-slate-400 mt-1.5">{editId
+                  ? "Leave it to keep the current schedule. Choosing a later date moves the next payment."
+                  : "Today or an earlier date is added immediately (missed months are caught up)."}</p>
               </div>
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-slate-100 dark:border-white/5">

@@ -4,6 +4,12 @@ const auth = require("../middleware/auth");
 const db = require("../config/db");
 const { checkBudgets } = require("../services/alerts");
 
+// The date is sent as plain text (2026-10-02). Sent as a Date it travels as a timestamp, and on a server that is not
+// in UTC the day then reads one day early in the browser.
+const pad2 = (n) => String(n).padStart(2, "0");
+const ymd = (v) => (v instanceof Date && !isNaN(v) ? `${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())}` : v);
+const shape = (r) => ({ ...r, date: ymd(r.date) });
+
 // Checks the fields of a transaction. Returns { error } or { data }.
 const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + "T00:00:00Z")) && new Date(s + "T00:00:00Z").toISOString().slice(0, 10) === s;
 async function checkFields(b, userId) {
@@ -38,7 +44,7 @@ router.get("/", auth, async (req, res) => {
        ORDER BY t.date DESC`,
       [req.user.id]
     );
-    res.json(rows);
+    res.json(rows.map(shape));
   } catch (err) {
     console.error("Transaction error:", err.message);  // ← add this
     res.status(500).json({ message: err.message });    // ← show real error
@@ -53,7 +59,7 @@ router.get("/:id", auth, async (req, res) => {
       [req.params.id, req.user.id]
     );
     if (!rows.length) return res.status(404).json({ message: "Not found" });
-    res.json(rows[0]);
+    res.json(shape(rows[0]));
   } catch (err) {
     console.error("Transaction error:", err.message);
     res.status(500).json({ message: err.message });
@@ -167,6 +173,37 @@ router.post("/bulk/category", auth, async (req, res) => {
     res.json({ updated: r.affectedRows, message: "Category changed" });
   } catch (err) {
     console.error("Transaction bulk category error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// POST /api/transactions/bulk/restore   { rows: [{ title, amount, type, category_id, date, note, is_recurring }] }
+// Puts back transactions that were just deleted (the "Undo" button). Each row is checked like a new transaction.
+router.post("/bulk/restore", auth, async (req, res) => {
+  try {
+    const rows = req.body && req.body.rows;
+    if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_BULK) return res.status(400).json({ message: `Restore between 1 and ${MAX_BULK} transactions.` });
+    const clean = [];
+    const seenCategory = new Map(); // the same category is checked once, not once per row
+    for (const r of rows) {
+      if (!r || typeof r !== "object") return res.status(400).json({ message: "Some of those transactions are not valid." });
+      const key = r.category_id === undefined || r.category_id === null || r.category_id === "" ? "" : String(r.category_id);
+      let v;
+      if (seenCategory.has(key) && key !== "") {
+        v = await checkFields({ ...r, category_id: null }, req.user.id);
+        if (!v.error) v.data.category_id = seenCategory.get(key);
+      } else {
+        v = await checkFields(r, req.user.id);
+        if (!v.error && key !== "") seenCategory.set(key, v.data.category_id);
+      }
+      if (v.error) return res.status(400).json({ message: v.error });
+      clean.push([req.user.id, v.data.title, v.data.amount, v.data.type, v.data.category_id, v.data.date, v.data.note, r.is_recurring ? 1 : 0]);
+    }
+    const [result] = await db.query("INSERT INTO transactions (user_id, title, amount, type, category_id, date, note, is_recurring) VALUES ?", [clean]);
+    try { await checkBudgets(req.user.id); } catch (e) { console.error("Alert check failed:", e.message); }
+    res.status(201).json({ restored: result.affectedRows, message: "Transactions restored" });
+  } catch (err) {
+    console.error("Transaction restore error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
