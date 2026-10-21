@@ -9,6 +9,7 @@ import BudgetProgress from "../components/BudgetProgress";
 import SpendingInsights from "../components/SpendingInsights";
 import HealthScore from "../components/HealthScore";
 import DashboardWidgets from "../components/DashboardWidgets";
+import GetStarted from "../components/GetStarted";
 import { fmt as money, useCurrency } from "../utils/currency";
 
 const COLORS = ["#7c5cfc","#10d9a0","#ffb547","#ff5e7d","#3b82f6","#f472b6","#34d399","#fb923c"];
@@ -123,6 +124,8 @@ export default function DashboardPage() {
             <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Live</span>
           </div>
         </div>
+
+        <GetStarted hasTransactions={recentTxns.length > 0} />
 
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
