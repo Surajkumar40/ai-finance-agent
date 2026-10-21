@@ -8,7 +8,7 @@ const esc = (v) => {
 export function toCSV(transactions) {
   const header = ["Date", "Title", "Type", "Category", "Amount", "Note"];
   const rows = transactions.map((t) => [
-    new Date(t.date).toLocaleDateString("en-CA"),
+    String(t.date).slice(0, 10), // already YYYY-MM-DD; going through new Date() shifts the day west of UTC
     t.title,
     t.type,
     t.category_name ?? "",
