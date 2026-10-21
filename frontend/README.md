@@ -1,16 +1,26 @@
-# React + Vite
+# Finance AI: web app
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React front end for Finance AI. See the [main README](../README.md) for what the project does, screenshots, the architecture and how to run everything.
 
-Currently, two official plugins are available:
+## Commands
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install      # install dependencies
+npm run dev      # start the app on http://localhost:5173
+npm run build    # production build into dist/
+npm run lint     # check the code with ESLint
+```
 
-## React Compiler
+The app calls the API at `http://localhost:5000` by default. To use another address, create a `.env` file in this folder:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+VITE_API_URL=https://your-api-address
+```
 
-## Expanding the ESLint configuration
+## Where things are
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- `src/pages/`: one file per screen
+- `src/components/`: shared pieces (layout, dashboard widgets, entry helpers)
+- `src/utils/`: currency formatting, CSV, voice parsing, what-if maths
+- `src/context/`: sign-in state and light/dark theme
+- `src/api/axios.js`: the shared API client (adds the login token, sends you to sign in when it expires)
