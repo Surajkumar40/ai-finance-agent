@@ -1,5 +1,7 @@
 # Finance AI
 
+[![CI](https://github.com/Surajkumar40/ai-finance-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Surajkumar40/ai-finance-agent/actions/workflows/ci.yml)
+
 A full-stack personal finance tracker with an AI assistant. Track spending, set budgets, save towards goals, share expenses with a household, and get plain-language answers about your money.
 
 **[Live demo](https://ai-finance-agent-beryl.vercel.app/login)**: click **"Try the demo, no sign-up needed"** to explore a fully populated account in one click.
@@ -84,6 +86,7 @@ A full-stack personal finance tracker with an AI assistant. Track spending, set 
 - **Dates that stay correct in any timezone.** Dates travel as plain `YYYY-MM-DD` text and are never converted through a timestamp, so a transaction on the 1st stays in its month for users anywhere in the world.
 - **Logic kept apart from the database.** Recurring-payment detection, budget suggestions, goal projections and expense splitting are plain functions with no database calls, which makes them easy to test and reason about.
 - **Demo mode.** `POST /api/demo` creates a temporary account with realistic data, limits how many can be created per hour, and removes them after a day.
+- **Tested on every push.** 31 automated tests run on GitHub Actions (see Tests below), and two of them guard the points that matter most: dates never shifting a day, and one person never seeing another's data.
 - **Trade-off.** Rate limits are held in memory, which is right for a single server. Running several API instances would need a shared store such as Redis.
 
 ## Run it on your computer
@@ -120,6 +123,19 @@ The app talks to `http://localhost:5000` by default. To point it somewhere else,
 
 Open http://localhost:5173 and use **Try the demo**, or sign up.
 
+### Tests
+
+31 automated tests run on every push (GitHub Actions) next to a lint and build check of the web app:
+
+- **18 unit tests** for the business logic: next due dates, splitting expenses, budget suggestions, goal projections and spotting repeating payments.
+- **13 end-to-end tests** that start the real API against a real MySQL database and check sign-in, privacy between users, transactions, bulk delete and undo, budgets, goals, recurring items, the demo account and data export.
+
+```bash
+cd backend
+npm run test:unit    # unit tests only (needs just the .env file)
+npm test             # unit tests, then end-to-end tests (needs the database from step 1)
+```
+
 ### Settings (`backend/.env`)
 
 | Setting | Needed? | Purpose |
@@ -145,11 +161,13 @@ backend/
   services/           business logic (recurring detection, budget suggestions, ...)
   middleware/         auth, rate limiting, security headers, CORS
   database/           schema.sql, migrate.js
+  tests/              unit and end-to-end tests
 frontend/
   src/pages/          one page per screen
   src/components/     shared UI (layout, dashboard widgets, charts, entry helpers)
   src/utils/          currency, CSV, voice parsing, what-if maths
 docs/screenshots/     images used in this README
+.github/workflows/   automatic checks that run on every push
 ```
 
 ## Deployment
