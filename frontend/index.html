@@ -6,13 +6,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Finance AI</title>
     <meta name="description" content="Track spending, budgets and savings with an AI assistant." />
-    <meta name="theme-color" content="#6d5dfc" />
+    <meta name="theme-color" content="#f6f5f1" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Finance AI" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Sets the theme before the first paint, so a dark-mode user never sees a white flash. Keep in step with ThemeContext.jsx. -->
+    <script>
+      (function () {
+        var dark = false;
+        try {
+          var saved = localStorage.getItem("theme");
+          dark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        } catch (e) {}
+        var root = document.documentElement;
+        if (dark) root.classList.add("dark");
+        root.style.colorScheme = dark ? "dark" : "light";
+        root.style.backgroundColor = dark ? "#141413" : "#f6f5f1";
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", dark ? "#141413" : "#f6f5f1");
+      })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>
