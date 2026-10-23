@@ -6,7 +6,7 @@ const fmt = (n) => money(n, 0);
 
 function getBarColor(pct) {
   if (pct >= 100) return { bar: "bg-red-500", text: "text-red-500", bg: "bg-red-50 dark:bg-red-500/10" };
-  if (pct >= 80)  return { bar: "bg-amber-400", text: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-500/10" };
+  if (pct >= 80)  return { bar: "bg-amber-500", text: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-500/10" };
   return { bar: "bg-brand-500", text: "text-brand-500", bg: "bg-brand-50 dark:bg-brand-500/10" };
 }
 
@@ -15,6 +15,14 @@ export default function BudgetProgress() {
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+
+  // Escape closes the dialog
+  useEffect(() => {
+    if (!showModal) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowModal(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showModal]);
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({ category_id: "", monthly_limit: "" });
   const [saving, setSaving] = useState(false);
@@ -134,9 +142,9 @@ export default function BudgetProgress() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setShowModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative w-full max-w-sm bg-white dark:bg-[#16161f]
-                          border border-slate-100 dark:border-white/10 rounded-2xl shadow-2xl"
+          <div className="absolute inset-0 bg-slate-900/50 animate-overlay-in" />
+          <div role="dialog" aria-modal="true" aria-label="Set monthly budget"
+            className="relative w-full max-w-sm bg-raised border border-line rounded-xl shadow-xl animate-modal-in"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-white/5">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Set Monthly Budget</h3>

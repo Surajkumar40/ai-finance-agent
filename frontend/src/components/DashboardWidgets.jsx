@@ -10,7 +10,7 @@ const fmt = (n) => money(n, 0);
 const parseYMD = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const daysUntil = (s) => { const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((parseYMD(s) - t) / 86400000); };
 const whenText = (n) => (n < 0 ? "overdue" : n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`);
-const bar = (p) => (p >= 100 ? "bg-rose-500" : p >= 80 ? "bg-amber-400" : "bg-emerald-500");
+const bar = (p) => (p >= 100 ? "bg-red-500" : p >= 80 ? "bg-amber-500" : "bg-emerald-500");
 
 function Card({ title, to, linkText, children }) {
   return (
@@ -125,9 +125,9 @@ function NetWorth() {
         const up = change && change.amount > 0, down = change && change.amount < 0;
         return (
           <>
-            <span className={`text-2xl font-bold font-mono ${totals.net < 0 ? "text-rose-500" : "text-slate-900 dark:text-white"}`}>{fmt(totals.net)}</span>
+            <span className={`text-2xl font-bold font-mono ${totals.net < 0 ? "text-red-500" : "text-slate-900 dark:text-white"}`}>{fmt(totals.net)}</span>
             {change && (
-              <p className={`text-xs mt-1 ${up ? "text-emerald-500" : down ? "text-rose-500" : "text-slate-400"}`}>
+              <p className={`text-xs mt-1 ${up ? "text-emerald-500" : down ? "text-red-500" : "text-slate-400"}`}>
                 {up ? "▲ " : down ? "▼ " : ""}{change.amount === 0 ? "No change" : fmt(Math.abs(change.amount))} since last month
               </p>
             )}
@@ -173,7 +173,7 @@ function Shared() {
                 <div className="h-2 rounded-full bg-slate-100 dark:bg-white/10 mt-2 overflow-hidden" role="progressbar" aria-valuenow={Math.min(100, pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Shared budgets used">
                   <div className={`h-full rounded-full ${bar(pct)}`} style={{ width: `${Math.min(100, pct)}%` }} />
                 </div>
-                <p className={`text-xs mt-2 ${over.length ? "text-rose-500 font-medium" : "text-slate-400"}`}>
+                <p className={`text-xs mt-2 ${over.length ? "text-red-500 font-medium" : "text-slate-400"}`}>
                   {over.length ? `${over.length} over the limit: ${over.slice(0, 2).map((b) => b.category_name).join(", ")}${over.length > 2 ? "…" : ""}` : `${d.budgets.length} shared ${d.budgets.length === 1 ? "budget" : "budgets"}, all within limits`}
                 </p>
               </>
