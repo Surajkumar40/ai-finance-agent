@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
+import { useTheme } from "../context/ThemeContext";
 
-const colorFor = (s) => (s >= 80 ? "#10d9a0" : s >= 60 ? "#7c5cfc" : s >= 40 ? "#ffb547" : "#ff5e7d");
+// Score colours: green, accent blue, amber, red. Each theme has its own shades so they stay readable.
+const SCORE = {
+  light: ["#0b7a55", "#1f6f8b", "#a15c07", "#c2362b"],
+  dark: ["#3cc796", "#5aa9c4", "#e0a23a", "#f4756b"],
+};
 
 export default function HealthScore() {
+  const { dark } = useTheme();
+  const palette = dark ? SCORE.dark : SCORE.light;
+  const colorFor = (s) => (s >= 80 ? palette[0] : s >= 60 ? palette[1] : s >= 40 ? palette[2] : palette[3]);
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 

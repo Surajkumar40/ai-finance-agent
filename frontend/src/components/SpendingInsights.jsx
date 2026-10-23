@@ -1,11 +1,24 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
+import { useTheme } from "../context/ThemeContext";
 import { fmt as money, useCurrency } from "../utils/currency";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
 const fmt = (n) => money(n, 0);
+const CHART = {
+  light: { line: "#1f6f8b", axis: "#6b675e", grid: "#e4e1d8" },
+  dark: { line: "#5aa9c4", axis: "#aaa69b", grid: "#343430" },
+};
+// 14000 -> 14k, 250000 -> 2.5L, so axis labels stay short
+const short = (n) => {
+  const a = Math.abs(n);
+  if (a >= 10000000) return `${+(n / 10000000).toFixed(1)}Cr`;
+  if (a >= 100000) return `${+(n / 100000).toFixed(1)}L`;
+  if (a >= 1000) return `${+(n / 1000).toFixed(1)}k`;
+  return String(n);
+};
 const pad = n => String(n).padStart(2, "0");
 const nowMonth = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
 const shift = (ym, delta) => {
@@ -31,7 +44,7 @@ function Mini({ title, value, hint, tone }) {
 const Tip = ({ active, payload, label: day }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white dark:bg-[#1e1e2e] border border-slate-100 dark:border-white/10 rounded-xl px-3 py-2 shadow-xl text-xs">
+    <div className="bg-raised border border-line rounded-lg px-3 py-2 shadow-lg text-xs">
       <p className="text-slate-400 mb-0.5">Day {day}</p>
       <p className="font-mono font-semibold text-brand-500">{fmt(payload[0].value)}</p>
     </div>
@@ -39,6 +52,8 @@ const Tip = ({ active, payload, label: day }) => {
 };
 
 export default function SpendingInsights() {
+  const { dark } = useTheme();
+  const c = dark ? CHART.dark : CHART.light;
   useCurrency();
   const [month, setMonth] = useState(nowMonth());
   const [data, setData] = useState(null);
@@ -108,18 +123,18 @@ export default function SpendingInsights() {
                 <div className="flex items-center justify-center h-48 text-slate-400 text-sm">No spending this month</div>
               ) : (
                 <ResponsiveContainer width="100%" height={210}>
-                  <AreaChart data={data.daily} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
+                  <AreaChart data={data.daily} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="spendFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#7c5cfc" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#7c5cfc" stopOpacity={0} />
+                        <stop offset="0%" stopColor={c.line} stopOpacity={0.25} />
+                        <stop offset="100%" stopColor={c.line} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} interval={Math.ceil(data.daily.length / 8) - 1} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: c.axis }} axisLine={false} tickLine={false} interval={Math.ceil(data.daily.length / 8) - 1} />
+                    <YAxis width={44} tickFormatter={short} tick={{ fontSize: 10, fill: c.axis }} axisLine={false} tickLine={false} />
                     <Tooltip content={<Tip />} />
-                    <Area type="monotone" dataKey={mode === "daily" ? "amount" : "cumulative"} stroke="#7c5cfc" strokeWidth={2} fill="url(#spendFill)" />
+                    <Area type="monotone" dataKey={mode === "daily" ? "amount" : "cumulative"} stroke={c.line} strokeWidth={2} fill="url(#spendFill)" />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
