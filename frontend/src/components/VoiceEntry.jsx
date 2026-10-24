@@ -88,7 +88,7 @@ export default function VoiceEntry({ categories = [], onSaved }) {
 
       {open && (
         <div className="print:hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-          <div role="dialog" aria-label="Add by voice" className="w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-white dark:bg-[#17171f] border border-slate-200 dark:border-white/10 p-5 shadow-2xl">
+          <div role="dialog" aria-label="Add by voice" className="w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-surface border border-slate-200 dark:border-white/10 p-5 shadow-xl">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Add by voice</h2>
               <button onClick={close} aria-label="Close" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl leading-none px-1">×</button>

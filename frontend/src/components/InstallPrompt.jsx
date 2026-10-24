@@ -25,8 +25,8 @@ export default function InstallPrompt() {
   const showIos = !installable && !dismissed && !isStandalone() && isIosSafari();
   const showInstall = (installable || showIos) && !dismissed && !isStandalone();
 
-  const shell = "pointer-events-auto rounded-2xl shadow-2xl border px-4 py-3 text-sm flex items-center gap-3";
-  const light = "bg-white border-slate-200 text-slate-800 dark:bg-[#1c1c28] dark:border-white/10 dark:text-slate-100";
+  const shell = "pointer-events-auto rounded-2xl shadow-xl border px-4 py-3 text-sm flex items-center gap-3";
+  const light = "bg-white border-slate-200 text-slate-800 dark:bg-raised dark:border-white/10 dark:text-slate-100";
 
   return (
     <div className="print:hidden fixed z-40 left-3 right-3 bottom-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[360px] flex flex-col gap-2 pointer-events-none">

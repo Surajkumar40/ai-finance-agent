@@ -26,7 +26,7 @@ const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 
 function Loading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0f0f17]" role="status" aria-live="polite">
+    <div className="min-h-screen flex items-center justify-center bg-canvas" role="status" aria-live="polite">
       <div className="w-8 h-8 rounded-full border-2 border-slate-300 dark:border-white/20 border-t-brand-500 animate-spin" aria-hidden />
       <span className="sr-only">Loading…</span>
     </div>

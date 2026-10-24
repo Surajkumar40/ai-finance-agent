@@ -160,8 +160,8 @@ export default function ImportCSV({ transactions = [], categories = [], onDone }
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={close}>
-          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/10 shadow-2xl"
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" onClick={close}>
+          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-surface border border-slate-100 dark:border-white/10 shadow-xl"
             onClick={e => e.stopPropagation()}>
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/5 shrink-0">

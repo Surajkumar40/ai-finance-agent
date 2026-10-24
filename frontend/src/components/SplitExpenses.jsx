@@ -4,7 +4,7 @@ import { localToday } from "../utils/voiceParse";
 import { fmt, useCurrency, symbol } from "../utils/currency";
 
 const money = (n) => fmt(n, 2, Number.isInteger(Number(n)) ? 0 : 2);
-const card = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl";
+const card = "bg-surface border border-slate-100 dark:border-white/5 rounded-2xl";
 const input = `w-full px-3 py-2.5 rounded-xl text-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10
   text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20`;
 const ghost = "px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all disabled:opacity-40";
@@ -13,11 +13,11 @@ const dayLabel = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", {
 
 function Undo({ label, onConfirm, disabled }) {
   const [ask, setAsk] = useState(false);
-  if (!ask) return <button className="text-xs text-slate-400 hover:text-rose-500 disabled:opacity-40" disabled={disabled} onClick={() => setAsk(true)}>{label}</button>;
+  if (!ask) return <button className="text-xs text-slate-400 hover:text-red-500 disabled:opacity-40" disabled={disabled} onClick={() => setAsk(true)}>{label}</button>;
   return (
     <span className="inline-flex items-center gap-1.5 text-xs">
       <span className="text-slate-500 dark:text-slate-400">Sure?</span>
-      <button className="px-2 py-1 rounded-lg font-semibold text-white bg-rose-500 hover:bg-rose-600" onClick={() => { setAsk(false); onConfirm(); }}>Yes</button>
+      <button className="px-2 py-1 rounded-lg font-semibold text-white bg-red-500 hover:bg-red-600" onClick={() => { setAsk(false); onConfirm(); }}>Yes</button>
       <button className={ghost} onClick={() => setAsk(false)}>No</button>
     </span>
   );
@@ -53,7 +53,7 @@ export default function SplitExpenses({ month, monthText }) {
     finally { setBusy(false); }
   }, []);
 
-  if (error) return <div className={`${card} p-4 sm:p-5`}><h2 className="font-semibold text-slate-900 dark:text-white">Split expenses</h2><p className="text-sm text-rose-500 mt-2">{error}</p></div>;
+  if (error) return <div className={`${card} p-4 sm:p-5`}><h2 className="font-semibold text-slate-900 dark:text-white">Split expenses</h2><p className="text-sm text-red-500 mt-2">{error}</p></div>;
   if (!data) return <div className={`${card} p-4 sm:p-5`}><h2 className="font-semibold text-slate-900 dark:text-white">Split expenses</h2><p className="text-sm text-slate-400 mt-2">Loading…</p></div>;
 
   const me = data.members.find((m) => m.is_me);
@@ -82,7 +82,7 @@ export default function SplitExpenses({ month, monthText }) {
         <button className="btn-primary" onClick={() => setOpen((o) => !o)}>{open ? "Close" : "Add expense"}</button>
       </div>
 
-      {msg && <p role={msg.bad ? "alert" : "status"} className={`text-sm mt-3 ${msg.bad ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400"}`}>{msg.text}</p>}
+      {msg && <p role={msg.bad ? "alert" : "status"} className={`text-sm mt-3 ${msg.bad ? "text-red-500" : "text-emerald-600 dark:text-emerald-400"}`}>{msg.text}</p>}
 
       {open && (
         <form onSubmit={add} className="mt-4 space-y-3 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03]">
@@ -117,12 +117,12 @@ export default function SplitExpenses({ month, monthText }) {
       )}
 
       <div className="mt-4">
-        <p className={`text-sm font-semibold ${mineBal > 0.004 ? "text-emerald-600 dark:text-emerald-400" : mineBal < -0.004 ? "text-rose-500" : "text-slate-600 dark:text-slate-300"}`}>{headline}</p>
+        <p className={`text-sm font-semibold ${mineBal > 0.004 ? "text-emerald-600 dark:text-emerald-400" : mineBal < -0.004 ? "text-red-500" : "text-slate-600 dark:text-slate-300"}`}>{headline}</p>
         <ul className="mt-2 grid sm:grid-cols-2 gap-1.5" aria-label="Balances">
           {data.balances.map((b) => (
             <li key={b.user_id} className="flex justify-between text-sm rounded-lg bg-slate-50 dark:bg-white/[0.03] px-3 py-1.5">
               <span className="text-slate-700 dark:text-slate-200 truncate">{b.is_me ? "You" : b.name}{b.former && <span className="text-slate-400"> (left)</span>}</span>
-              <span className={b.balance > 0.004 ? "text-emerald-600 dark:text-emerald-400" : b.balance < -0.004 ? "text-rose-500" : "text-slate-400"}>
+              <span className={b.balance > 0.004 ? "text-emerald-600 dark:text-emerald-400" : b.balance < -0.004 ? "text-red-500" : "text-slate-400"}>
                 {Math.abs(b.balance) < 0.005 ? "settled" : b.balance > 0 ? `is owed ${money(b.balance)}` : `owes ${money(-b.balance)}`}
               </span>
             </li>
