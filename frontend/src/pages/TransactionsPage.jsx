@@ -85,6 +85,13 @@ export default function TransactionsPage() {
   const [undo, setUndo] = useState(null);       // { rows, text } for the "Undo" bar after a delete
   const undoTimer = useRef(null);
   useEffect(() => () => clearTimeout(undoTimer.current), []);
+  // Escape closes the add / edit dialog
+  useEffect(() => {
+    if (!showModal) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowModal(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showModal]);
   // Changing what is shown also clears the ticks, so a bulk action never touches rows you can no longer see.
   const resetView = () => { setLimit(PAGE); setSelected(new Set()); setBulkAsk(false); };
   const [scanning, setScanning] = useState(false);
@@ -283,38 +290,38 @@ export default function TransactionsPage() {
             </svg>
             <input value={search} onChange={e => { setSearch(e.target.value); resetView(); }}
               placeholder="Search transactions…"
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm bg-white dark:bg-[#16161f]
+              className="w-full pl-9 pr-4 py-2.5 rounded-lg text-sm bg-surface
                          border border-slate-200 dark:border-white/10
-                         text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600
-                         focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 transition-all" />
+                         text-slate-900 dark:text-slate-100 placeholder:text-slate-400
+                         focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors" />
           </div>
           <div className="flex gap-2">
             {["all","income","expense"].map(f => (
               <button key={f} onClick={() => { setFilter(f); resetView(); }}
-                className={`px-4 py-2.5 rounded-xl text-xs font-semibold capitalize transition-all ${
+                className={`px-4 py-2.5 rounded-lg text-xs font-medium capitalize transition-colors ${
                   filter === f
-                    ? "bg-brand-500 text-white shadow-lg shadow-brand-500/25"
-                    : "bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-brand-300"
+                    ? "bg-brand-500 text-white"
+                    : "bg-surface border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100/70 dark:hover:bg-white/5"
                 }`}>
                 {f}
               </button>
             ))}
           </div>
           <select value={range} onChange={e => { setRange(e.target.value); resetView(); }} aria-label="Show transactions from"
-            className="px-3 py-2.5 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
+            className="px-3 py-2.5 rounded-lg text-xs font-medium bg-surface border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
             {RANGES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
         </div>
 
         <div className="flex flex-wrap gap-2 -mt-2">
           <select value={catFilter} onChange={e => { setCatFilter(e.target.value); resetView(); }} aria-label="Filter by category"
-            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400 max-w-full">
+            className="px-3 py-2 rounded-lg text-xs font-medium bg-surface border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400 max-w-full">
             <option value="all">All categories</option>
             <option value="none">No category</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={sortBy} onChange={e => { setSortBy(e.target.value); resetView(); }} aria-label="Sort transactions"
-            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-[#16161f] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
+            className="px-3 py-2 rounded-lg text-xs font-medium bg-surface border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
             {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
           {isFiltered && (
@@ -330,21 +337,21 @@ export default function TransactionsPage() {
         )}
 
         {undo && (
-          <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-4 py-3 rounded-xl bg-slate-900 text-white text-sm shadow-2xl max-w-[92vw]">
+          <div role="status" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-4 py-3 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm shadow-lg max-w-[92vw]">
             <span className="truncate">{undo.text}</span>
-            <button onClick={doUndo} className="font-semibold text-brand-300 hover:text-white shrink-0">Undo</button>
+            <button onClick={doUndo} className="font-semibold text-brand-300 dark:text-brand-600 hover:underline shrink-0">Undo</button>
             <button onClick={() => { clearTimeout(undoTimer.current); setUndo(null); }} aria-label="Dismiss" className="opacity-60 hover:opacity-100 shrink-0">✕</button>
           </div>
         )}
 
         {bulkMsg && (
-          <div role="status" className="flex items-center justify-between px-4 py-3 rounded-xl bg-brand-50 dark:bg-brand-500/10 border border-brand-100 dark:border-brand-500/20 text-sm text-brand-600 dark:text-brand-400">
+          <div role="status" className="flex items-center justify-between px-4 py-3 rounded-lg bg-brand-50 dark:bg-brand-500/10 border border-brand-100 dark:border-brand-500/20 text-sm text-brand-700 dark:text-brand-300">
             <span>{bulkMsg}</span><button onClick={() => setBulkMsg("")} aria-label="Dismiss" className="text-xs opacity-70 hover:opacity-100">✕</button>
           </div>
         )}
 
         {pickedCount > 0 && (
-          <div role="region" aria-label="Bulk actions" className="sticky top-2 z-10 flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl bg-white dark:bg-[#1c1c28] border border-brand-200 dark:border-brand-500/30 shadow-lg">
+          <div role="region" aria-label="Bulk actions" className="sticky top-2 z-10 flex flex-wrap items-center gap-2 px-4 py-3 rounded-lg bg-surface border border-brand-200 dark:border-brand-500/30 shadow-lg">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{pickedCount} selected</span>
             {allShownPicked && pickedCount < Math.min(filtered.length, MAX_BULK) && (
               <button onClick={pickAllMatching} className="text-xs font-semibold text-brand-500 hover:text-brand-600">
@@ -374,7 +381,7 @@ export default function TransactionsPage() {
         )}
 
         {/* Table */}
-        <div className="bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl overflow-hidden">
+        <div className="bg-surface border border-line rounded-xl overflow-hidden">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-600">
               <svg className="w-10 h-10 mb-3 opacity-40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -419,7 +426,7 @@ export default function TransactionsPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium"
-                          style={{ background: (t.category_color || "#7c5cfc") + "18", color: t.category_color || "#7c5cfc" }}>
+                          style={{ background: (t.category_color || "#6b675e") + "18", color: t.category_color || "#6b675e" }}>
                           {t.category_name || "—"}
                         </span>
                       </td>
@@ -486,10 +493,9 @@ export default function TransactionsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setShowModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md bg-white dark:bg-[#16161f]
-                          border border-slate-100 dark:border-white/10
-                          rounded-2xl shadow-2xl animate-slide-up"
+          <div className="absolute inset-0 bg-slate-900/50 animate-overlay-in" />
+          <div role="dialog" aria-modal="true" aria-label={editId ? "Edit transaction" : "New transaction"}
+            className="relative w-full max-w-md max-h-[92vh] overflow-y-auto bg-raised border border-line rounded-xl shadow-xl animate-modal-in"
             onClick={e => e.stopPropagation()}>
 
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-white/5">

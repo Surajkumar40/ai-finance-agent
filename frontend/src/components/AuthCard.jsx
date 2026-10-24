@@ -1,45 +1,80 @@
 import { Link } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 
-// Small centred card used by the forgot-password and reset-password pages
-export default function AuthCard({ title, subtitle, children }) {
+const Sun = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+);
+const Moon = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+);
+
+// Light/dark switch used on the sign-in style pages
+export function ThemeToggle() {
   const { dark, toggle } = useTheme();
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0d0d14] flex flex-col justify-center items-center px-6 py-12 relative transition-colors duration-300">
-      <button onClick={toggle} aria-label="Toggle theme"
-        className="absolute top-5 right-5 w-9 h-9 rounded-xl border border-slate-200 dark:border-white/10
-                   bg-white dark:bg-[#16161f] text-slate-500 dark:text-slate-400
-                   flex items-center justify-center hover:border-brand-400 transition-all shadow-sm">
-        {dark
-          ? <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-          : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
-      </button>
+    <button onClick={toggle} aria-pressed={dark} aria-label="Dark mode"
+      className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-slate-500 transition-colors hover:text-slate-800 dark:hover:text-slate-100">
+      {dark ? <Sun /> : <Moon />}
+    </button>
+  );
+}
 
+// Logo mark + name
+export function Brand({ light = false }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${light ? "bg-white/15" : "bg-brand-500"}`}>
+        <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      </div>
+      <span className={`text-sm font-semibold tracking-tight ${light ? "text-white" : "text-slate-900 dark:text-slate-100"}`}>
+        Finance<span className={light ? "text-brand-300" : "text-brand-500 dark:text-brand-400"}> AI</span>
+      </span>
+    </div>
+  );
+}
+
+// Left half of the sign-in and sign-up pages (hidden on phones). Flat colour, plain list, only claims the app really backs up.
+export function BrandPanel({ title, text, points }) {
+  return (
+    <div className="hidden flex-col justify-between bg-brand-900 p-12 lg:flex lg:w-[44%]">
+      <Brand light />
+      <div>
+        <h2 className="max-w-sm text-3xl font-semibold leading-tight tracking-tight text-white">{title}</h2>
+        <p className="mt-4 max-w-sm text-base leading-relaxed text-brand-100">{text}</p>
+        <ul className="mt-8 space-y-3">
+          {points.map((p) => (
+            <li key={p} className="flex items-start gap-3 text-sm text-brand-100">
+              <svg className="mt-0.5 h-4 w-4 shrink-0 text-brand-300" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>
+              {p}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="text-xs text-brand-300">Your data stays private to your account.</p>
+    </div>
+  );
+}
+
+// Small centred card used by the forgot-password and reset-password pages
+export default function AuthCard({ title, subtitle, children }) {
+  return (
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-canvas px-6 py-12">
+      <ThemeToggle />
       <div className="w-full max-w-sm animate-slide-up">
-        <Link to="/login" className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg>
-          </div>
-          <span className="font-bold text-slate-900 dark:text-white">Finance<span className="text-brand-500">AI</span></span>
-        </Link>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1 tracking-tight">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-400 dark:text-slate-500 mb-7">{subtitle}</p>}
+        <Link to="/login" className="mb-8 inline-block"><Brand /></Link>
+        <h1 className="mb-1 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{title}</h1>
+        {subtitle && <p className="mb-7 text-sm text-slate-500">{subtitle}</p>}
         {children}
       </div>
     </div>
   );
 }
 
-export const inputClass = `w-full px-4 py-3 rounded-xl text-sm
-  bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10
-  text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600
-  focus:outline-none focus:border-brand-400 dark:focus:border-brand-500
-  focus:ring-2 focus:ring-brand-400/20 transition-all`;
-export const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
-export const primaryBtn = `w-full py-3 rounded-xl font-semibold text-sm text-white bg-brand-500 hover:bg-brand-600 active:scale-95
-  disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 shadow-lg shadow-brand-500/25`;
+export const inputClass = "field !py-2.5";
+export const labelClass = "field-label";
+export const primaryBtn = "btn-primary w-full !py-2.5";
 export function ErrorBox({ children }) {
   return (
-    <div role="alert" className="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{children}</div>
+    <div role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">{children}</div>
   );
 }

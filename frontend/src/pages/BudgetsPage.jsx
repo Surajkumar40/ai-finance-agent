@@ -49,6 +49,15 @@ export default function BudgetsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [modal, setModal] = useState(null); // null | { id?, category_id, monthly_limit, name? }
+
+  // Escape closes the dialog
+  const modalOpen = modal !== null;
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setModal(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [modalOpen]);
   const [formError, setFormError] = useState("");
   const [busy, setBusy] = useState(false);
   const reqId = useRef(0);
@@ -274,7 +283,7 @@ export default function BudgetsPage() {
                         </div>
                         <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openEdit(b)} className="px-2 py-1 text-xs text-slate-500 hover:text-brand-500">Edit</button>
-                          <button onClick={() => remove(b)} className="px-2 py-1 text-xs text-slate-400 hover:text-red-500">✕</button>
+                          <button onClick={() => remove(b)} className="px-2 py-1 text-xs text-slate-400 hover:text-red-500"><span aria-hidden="true">✕</span><span className="sr-only">Close</span></button>
                         </div>
                       </div>
 
@@ -380,8 +389,8 @@ export default function BudgetsPage() {
 
       {/* Add / edit modal */}
       {modal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setModal(null)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/10 shadow-2xl"
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 animate-overlay-in" onClick={() => setModal(null)}>
+          <div role="dialog" aria-modal="true" aria-label={modal.id ? `Edit ${modal.name} budget` : "Set monthly budget"} className="w-full max-w-sm rounded-xl bg-raised border border-line shadow-xl animate-modal-in"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-white/5">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
