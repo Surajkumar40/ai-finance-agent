@@ -200,7 +200,7 @@ export default function RecurringPage() {
           ) : items.map(it => (
             <div key={it.id} className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 px-4 py-3.5 ${it.is_active ? "" : "opacity-50"}`}>
               <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
-                style={{ background: (it.category_color || "#7c5cfc") + "22" }}>
+                style={{ background: (it.category_color || "#6b675e") + "22" }}>
                 {it.category_icon || (it.type === "income" ? "↑" : "↓")}
               </div>
               <div className="flex-1 min-w-0">
@@ -233,8 +233,8 @@ export default function RecurringPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" onClick={() => setShowModal(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-surface border border-slate-100 dark:border-white/10 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/5">
               <h3 className="font-semibold text-slate-900 dark:text-white">{editId ? "Edit recurring transaction" : "Add recurring transaction"}</h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">✕</button>

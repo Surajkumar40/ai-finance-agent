@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import Layout from "../components/Layout";
 import api from "../api/axios";
+import { useTheme } from "../context/ThemeContext";
 import { buildBaseline, simulate, presetTrimAll } from "../utils/whatif";
 import { localToday } from "../utils/voiceParse";
 import { fmt as money, useCurrency, symbol, compact } from "../utils/currency";
@@ -23,7 +24,7 @@ const monthsText = (m) => {
 const etaText = (m) => (m < 1 ? "within a month" : `in about ${monthsText(m)}`);
 
 const HORIZONS = [3, 6, 12, 24];
-const card = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl";
+const card = "bg-surface border border-slate-100 dark:border-white/5 rounded-2xl";
 const chip = "px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all";
 
 function Tile({ label, now, next, good }) {
@@ -31,13 +32,16 @@ function Tile({ label, now, next, good }) {
   return (
     <div className={`${card} p-4`}>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className={`text-xl font-bold mt-1 ${changed ? (good ? "text-emerald-500" : "text-rose-500") : "text-slate-900 dark:text-white"}`}>{next}</p>
+      <p className={`text-xl font-bold mt-1 ${changed ? (good ? "text-emerald-500" : "text-red-500") : "text-slate-900 dark:text-white"}`}>{next}</p>
       {changed && <p className="text-xs text-slate-400 mt-0.5">now {now}</p>}
     </div>
   );
 }
 
 export default function SimulatorPage() {
+  const { dark } = useTheme();
+  const ink = dark ? "#aaa69b" : "#6b675e"; // axis text and the "Now" line
+  const accent = dark ? "#5aa9c4" : "#1f6f8b"; // the "With your changes" line
   useCurrency();
   const [data, setData] = useState({ status: "loading" });
   const [cuts, setCuts] = useState({});
@@ -82,7 +86,7 @@ export default function SimulatorPage() {
         </div>
 
         {data.status === "loading" && <div className={`${card} p-6 text-sm text-slate-400`}>Loading your numbers…</div>}
-        {data.status === "error" && <div role="alert" className="rounded-2xl px-4 py-3 text-sm bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30">{data.message}</div>}
+        {data.status === "error" && <div role="alert" className="rounded-2xl px-4 py-3 text-sm bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30">{data.message}</div>}
 
         {data.status === "ready" && !baseline.categories.length && (
           <div className={`${card} p-6 text-center`}>
@@ -122,7 +126,7 @@ export default function SimulatorPage() {
                         <label htmlFor={`cut-${c.id}`} className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
                           {c.name} <span className="text-xs font-normal text-slate-400">{inr(c.monthly)}/mo</span>
                         </label>
-                        <span className={`text-xs font-semibold whitespace-nowrap ${v < 0 ? "text-emerald-500" : v > 0 ? "text-rose-500" : "text-slate-400"}`}>
+                        <span className={`text-xs font-semibold whitespace-nowrap ${v < 0 ? "text-emerald-500" : v > 0 ? "text-red-500" : "text-slate-400"}`}>
                           {v === 0 ? "No change" : `${v > 0 ? "+" : ""}${v}%`}
                           {v !== 0 && <span className="font-normal text-slate-400"> · {saves > 0 ? `saves ${inr(saves)}` : `costs ${inr(-saves)} more`}/mo</span>}
                         </span>
@@ -170,7 +174,7 @@ export default function SimulatorPage() {
               className={`px-4 py-3 rounded-2xl text-sm font-medium border ${touched && result.monthlyGain > 0.5
                 ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-500/30"
                 : touched && result.monthlyGain < -0.5
-                  ? "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-500/10 dark:text-rose-200 dark:border-rose-500/30"
+                  ? "bg-red-50 text-red-800 border-red-200 dark:bg-red-500/10 dark:text-red-200 dark:border-red-500/30"
                   : "bg-slate-50 text-slate-600 border-slate-200 dark:bg-white/5 dark:text-slate-300 dark:border-white/10"}`}>
               {headline}
             </div>
@@ -188,13 +192,13 @@ export default function SimulatorPage() {
               <div className="h-64" aria-label="Chart of total savings, now versus with your changes">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={result.series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.2} />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94a3b8" }} tickFormatter={(m) => `${m}m`} interval="preserveStartEnd" minTickGap={28} />
-                    <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} tickFormatter={short} width={56} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={ink} strokeOpacity={0.25} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: ink }} tickFormatter={(m) => `${m}m`} interval="preserveStartEnd" minTickGap={28} />
+                    <YAxis tick={{ fontSize: 11, fill: ink }} tickFormatter={short} width={56} />
                     <Tooltip formatter={(v, n) => [inr(v), n]} labelFormatter={(m) => `After ${m} month${m === 1 ? "" : "s"}`}
                       contentStyle={{ borderRadius: 12, fontSize: 12 }} />
-                    <Line type="monotone" dataKey="now" name="Now" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 4" dot={false} />
-                    <Line type="monotone" dataKey="scenario" name="With your changes" stroke="#7c5cfc" strokeWidth={3} dot={false} />
+                    <Line type="monotone" dataKey="now" name="Now" stroke={ink} strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                    <Line type="monotone" dataKey="scenario" name="With your changes" stroke={accent} strokeWidth={3} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -217,13 +221,13 @@ export default function SimulatorPage() {
                               ? `Becomes reachable ${etaText(g.monthsScenario)}.`
                               : <>Reached {etaText(g.monthsScenario)}
                                 {g.monthsSooner != null && g.monthsSooner >= 0.5 && <span className="text-emerald-500 font-medium"> · {monthsText(g.monthsSooner)} sooner</span>}
-                                {g.monthsSooner != null && g.monthsSooner <= -0.5 && <span className="text-rose-500 font-medium"> · {monthsText(-g.monthsSooner)} later</span>}
+                                {g.monthsSooner != null && g.monthsSooner <= -0.5 && <span className="text-red-500 font-medium"> · {monthsText(-g.monthsSooner)} later</span>}
                                 {g.monthsSooner != null && Math.abs(g.monthsSooner) >= 0.5 && <span className="text-xs text-slate-400"> (was {monthsText(g.monthsNow)})</span>}</>}
                         </p>
                         {g.needed != null && (
                           <p className="text-xs mt-0.5">
                             <span className="text-slate-400">Needs {inr(g.needed)}/month for its date: </span>
-                            <span className={g.onTrackScenario ? "text-emerald-500 font-medium" : "text-rose-500 font-medium"}>{g.onTrackScenario ? "on track" : "behind"}</span>
+                            <span className={g.onTrackScenario ? "text-emerald-500 font-medium" : "text-red-500 font-medium"}>{g.onTrackScenario ? "on track" : "behind"}</span>
                             {g.onTrackNow !== g.onTrackScenario && <span className="text-slate-400"> (was {g.onTrackNow ? "on track" : "behind"})</span>}
                           </p>
                         )}

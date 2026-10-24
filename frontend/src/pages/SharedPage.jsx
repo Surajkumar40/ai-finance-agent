@@ -7,7 +7,7 @@ import { localToday } from "../utils/voiceParse";
 import { fmt as money, useCurrency, symbol } from "../utils/currency";
 
 const inr = (n) => money(Math.round(Number(n) || 0), 0);
-const card = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl";
+const card = "bg-surface border border-slate-100 dark:border-white/5 rounded-2xl";
 const input = `w-full px-3 py-2.5 rounded-xl text-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10
   text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20`;
 const ghost = "px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all disabled:opacity-40";
@@ -30,7 +30,7 @@ function ConfirmButton({ label, confirmLabel = "Yes", onConfirm, danger = true, 
   return (
     <span className="inline-flex items-center gap-1.5 text-xs">
       <span className="text-slate-500 dark:text-slate-400">Sure?</span>
-      <button className={`px-2.5 py-1.5 rounded-lg font-semibold text-white ${danger ? "bg-rose-500 hover:bg-rose-600" : "bg-brand-500 hover:bg-brand-600"}`}
+      <button className={`px-2.5 py-1.5 rounded-lg font-semibold text-white ${danger ? "bg-red-500 hover:bg-red-600" : "bg-brand-500 hover:bg-brand-600"}`}
         onClick={() => { setAsk(false); onConfirm(); }}>{confirmLabel}</button>
       <button className={ghost} onClick={() => setAsk(false)}>No</button>
     </span>
@@ -49,7 +49,7 @@ function useFlash() {
   return [msg, show, clear];
 }
 
-const barColor = (p) => (p >= 100 ? "bg-rose-500" : p >= 80 ? "bg-amber-400" : "bg-emerald-500");
+const barColor = (p) => (p >= 100 ? "bg-red-500" : p >= 80 ? "bg-amber-400" : "bg-emerald-500");
 
 export default function SharedPage() {
   useCurrency();
@@ -147,7 +147,7 @@ export default function SharedPage() {
         <div role="status" aria-live="polite">
           {msg && (
             <div className={`px-4 py-3 rounded-2xl text-sm font-medium border ${msg.bad
-              ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30"
+              ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30"
               : "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-500/30"}`}>{msg.text}</div>
           )}
         </div>
@@ -326,8 +326,8 @@ export default function SharedPage() {
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate"><span aria-hidden>{b.icon || "💰"} </span>{b.category_name}</p>
                             <p className="text-xs text-slate-400 mt-0.5">
-                              {inr(b.spent)} of {inr(b.monthly_limit)} · <span className={b.percent >= 100 ? "text-rose-500 font-semibold" : b.percent >= 80 ? "text-amber-500 font-semibold" : ""}>{b.percent}%</span>
-                              {b.spent > b.monthly_limit && <span className="text-rose-500"> · {inr(b.spent - b.monthly_limit)} over</span>}
+                              {inr(b.spent)} of {inr(b.monthly_limit)} · <span className={b.percent >= 100 ? "text-red-500 font-semibold" : b.percent >= 80 ? "text-amber-500 font-semibold" : ""}>{b.percent}%</span>
+                              {b.spent > b.monthly_limit && <span className="text-red-500"> · {inr(b.spent - b.monthly_limit)} over</span>}
                             </p>
                           </div>
                           <ConfirmButton label="Remove" confirmLabel="Yes, remove" disabled={busy} onConfirm={() => run(() => api.delete(`/household/budgets/${b.id}`), "Shared budget removed")} />
@@ -369,7 +369,7 @@ export default function SharedPage() {
               <h2 className="font-semibold text-slate-900 dark:text-white">Household activity</h2>
               <p className="text-xs text-slate-400 mt-0.5 mb-3">Transactions in {monthLabel(month)} from people who chose to share them.</p>
               {!act && <p className="text-sm text-slate-400">Loading…</p>}
-              {act?.failed && <p className="text-sm text-rose-500">Could not load the activity. Please try again.</p>}
+              {act?.failed && <p className="text-sm text-red-500">Could not load the activity. Please try again.</p>}
               {act && !act.failed && act.sharing_members.length === 0 && (
                 <p className="text-sm text-slate-500 dark:text-slate-400">Nobody is sharing their transactions yet. Each person decides for themselves with “Share my transactions” above.</p>
               )}

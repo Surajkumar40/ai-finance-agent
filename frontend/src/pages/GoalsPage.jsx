@@ -36,8 +36,8 @@ const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-4
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-surface border border-slate-100 dark:border-white/10 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/5">
           <h3 className="font-semibold text-slate-900 dark:text-white">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">✕</button>
@@ -180,8 +180,8 @@ export default function GoalsPage() {
                     <span className="text-xs text-slate-400">of {fmt(g.target_amount)} · {g.percent}%</span>
                   </div>
                   <div className="h-2.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${g.percent}%`, background: g.completed ? "#10d9a0" : "#7c5cfc" }} />
+                    <div className={`h-full rounded-full transition-all duration-700 ${g.completed ? "bg-emerald-500" : "bg-brand-500 dark:bg-brand-400"}`}
+                      style={{ width: `${g.percent}%` }} />
                   </div>
                   {!g.completed && g.monthly_needed !== null && (
                     <p className="text-[11px] text-slate-400 mt-2">Save about <span className="font-semibold text-brand-500">{fmt(g.monthly_needed)}</span> a month to get there on time</p>

@@ -149,7 +149,7 @@ export default function AIChatPage() {
         </div>
 
         {/* Chat window */}
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-[#16161f]
+        <div className="flex-1 overflow-y-auto bg-surface
                         border border-slate-100 dark:border-white/5 rounded-2xl p-4 space-y-4 mb-4">
           {messages.map((m, i) => (
             <div key={i} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
@@ -197,7 +197,7 @@ export default function AIChatPage() {
             {SUGGESTIONS.map(q => (
               <button key={q} onClick={() => { setInput(q); inputRef.current?.focus(); }}
                 className="px-3 py-1.5 rounded-xl text-xs font-medium
-                           bg-white dark:bg-[#16161f]
+                           bg-surface
                            border border-slate-200 dark:border-white/10
                            text-slate-500 dark:text-slate-400
                            hover:border-brand-400 hover:text-brand-500
@@ -209,7 +209,7 @@ export default function AIChatPage() {
         )}
 
         {/* Input */}
-        <div className="flex gap-3 bg-white dark:bg-[#16161f]
+        <div className="flex gap-3 bg-surface
                         border border-slate-200 dark:border-white/10
                         rounded-2xl p-2 shadow-sm focus-within:border-brand-400 dark:focus-within:border-brand-500
                         focus-within:ring-2 focus-within:ring-brand-400/20 transition-all">

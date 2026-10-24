@@ -7,7 +7,7 @@ import { fmt as money, compact, useCurrency } from "../utils/currency";
 import { localToday } from "../utils/voiceParse";
 
 const fmt = (n) => money(n, 0);
-const card = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-4 break-inside-avoid print:border-slate-200";
+const card = "bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-4 break-inside-avoid print:border-slate-200";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const monthName = (ym) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1)).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
 const dayLabel = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -133,7 +133,7 @@ export default function YearlyReportPage() {
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">Your whole year in one page. <Link to="/reports" className="text-brand-500 hover:underline">Monthly report</Link></p>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#16161f] overflow-hidden">
+            <div className="flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-surface overflow-hidden">
               <button onClick={() => setYear((y) => y - 1)} disabled={year <= 1990} aria-label="Previous year" className="px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-30">‹</button>
               <span className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 min-w-[80px] text-center" aria-live="polite">{year}</span>
               <button onClick={() => setYear((y) => y + 1)} disabled={year >= nowYear} aria-label="Next year" className="px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed">›</button>

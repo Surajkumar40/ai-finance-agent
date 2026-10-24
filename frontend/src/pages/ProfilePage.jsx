@@ -11,7 +11,7 @@ const inputClass = `w-full px-3 py-2.5 rounded-xl text-sm
   focus:outline-none focus:border-brand-400 dark:focus:border-brand-500 focus:ring-2 focus:ring-brand-400/20 transition-all
   disabled:opacity-60 disabled:cursor-not-allowed`;
 const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
-const cardClass = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-5";
+const cardClass = "bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-5";
 const btnBase = "px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-w-[140px]";
 // idle = purple, nothing to save = quiet grey, just saved = green tick (goes back by itself)
 const btnClass = (state) => state === "saved"
@@ -342,7 +342,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Danger zone */}
-        <div className="rounded-2xl p-5 border border-red-200 dark:border-red-500/20 bg-white dark:bg-[#16161f]">
+        <div className="rounded-2xl p-5 border border-red-200 dark:border-red-500/20 bg-surface">
           <h2 className="text-sm font-semibold text-red-600 dark:text-red-400 mb-1">Delete account</h2>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
             This permanently removes your account and everything in it: transactions, budgets, goals, recurring items, alerts and chat history. It cannot be undone. Download your data first if you want to keep a copy.

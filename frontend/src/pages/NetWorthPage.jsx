@@ -5,7 +5,7 @@ import { fmt as money, compact, symbol, useCurrency } from "../utils/currency";
 import { localToday } from "../utils/voiceParse";
 
 const fmt = (n) => money(n, 2);
-const card = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-4 sm:p-5";
+const card = "bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-4 sm:p-5";
 const input = `w-full px-3 py-2.5 rounded-xl text-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10
   text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20`;
 const ghost = "px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all disabled:opacity-40";
@@ -86,11 +86,11 @@ function Row({ item, busy, onSave, onRemove }) {
           <span className="text-sm font-semibold text-slate-900 dark:text-white">{fmt(item.balance)}</span>
           <button className={ghost} disabled={busy} aria-label={`Update ${item.name}`} onClick={() => { setVal(String(item.balance)); setEdit(true); setAsk(false); }}>Update</button>
           {!ask
-            ? <button className="text-xs text-slate-400 hover:text-rose-500 disabled:opacity-40" disabled={busy} aria-label={`Remove ${item.name}`} onClick={() => setAsk(true)}>Remove</button>
+            ? <button className="text-xs text-slate-400 hover:text-red-500 disabled:opacity-40" disabled={busy} aria-label={`Remove ${item.name}`} onClick={() => setAsk(true)}>Remove</button>
             : (
               <span className="inline-flex items-center gap-1.5 text-xs">
                 <span className="text-slate-500 dark:text-slate-400">Sure?</span>
-                <button className="px-2 py-1 rounded-lg font-semibold text-white bg-rose-500 hover:bg-rose-600" onClick={onRemove}>Yes</button>
+                <button className="px-2 py-1 rounded-lg font-semibold text-white bg-red-500 hover:bg-red-600" onClick={onRemove}>Yes</button>
                 <button className={ghost} onClick={() => setAsk(false)}>No</button>
               </span>
             )}
@@ -162,7 +162,7 @@ export default function NetWorthPage() {
           <button className="btn-primary" disabled={!data || full} onClick={() => setOpen((o) => !o)}>{open ? "Close" : "Add account or debt"}</button>
         </div>
 
-        {msg && <p role={msg.bad ? "alert" : "status"} className={`text-sm ${msg.bad ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400"}`}>{msg.text}</p>}
+        {msg && <p role={msg.bad ? "alert" : "status"} className={`text-sm ${msg.bad ? "text-red-500" : "text-emerald-600 dark:text-emerald-400"}`}>{msg.text}</p>}
         {error && <div role="alert" className="px-4 py-3 rounded-xl text-sm bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-300 border border-red-100 dark:border-red-500/20">{error}</div>}
         {!data && !error && <p className="text-sm text-slate-400 py-16 text-center">Loading…</p>}
         {full && <p className="text-xs text-slate-400">You are tracking the maximum of {data.max_items} items.</p>}
@@ -202,7 +202,7 @@ export default function NetWorthPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Summary">
               <div className="col-span-2 lg:col-span-1"><Stat label="Net worth" value={fmt(t.net)} tone={netTone} /></div>
               <Stat label="You own" value={fmt(t.assets)} tone="text-emerald-600 dark:text-emerald-400" />
-              <Stat label="You owe" value={fmt(t.debts)} tone={t.debts > 0 ? "text-rose-500" : undefined} />
+              <Stat label="You owe" value={fmt(t.debts)} tone={t.debts > 0 ? "text-red-500" : undefined} />
               <Stat label="Since last month" value={data.change ? `${data.change.amount > 0 ? "+" : ""}${fmt(data.change.amount)}` : "—"}
                 tone={data.change ? (data.change.amount < 0 ? "text-red-500" : data.change.amount > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined) : undefined}
                 sub={data.change ? "vs the end of last month" : "needs an earlier update"} />

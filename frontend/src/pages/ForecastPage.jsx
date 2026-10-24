@@ -113,7 +113,7 @@ function Chart({ points, events }) {
           const list = eventsByDate.get(d);
           const net = list.reduce((s, e) => s + (e.type === "income" ? e.amount : -e.amount), 0);
           return <circle key={d} cx={geo.x(i)} cy={geo.y(points[i].balance)} r="4"
-            className={`${net >= 0 ? "fill-emerald-500" : "fill-amber-500"} stroke-white dark:stroke-[#16161f]`} strokeWidth="2" />;
+            className={`${net >= 0 ? "fill-emerald-500" : "fill-amber-500"} stroke-white dark:stroke-surface`} strokeWidth="2" />;
         })}
 
         {/* hover */}
@@ -122,14 +122,14 @@ function Chart({ points, events }) {
             <line x1={geo.x(hover)} x2={geo.x(hover)} y1={PAD.t} y2={H - PAD.b}
               className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1" />
             <circle cx={geo.x(hover)} cy={geo.y(hp.balance)} r="5" fill="currentColor"
-              className={`${hp.balance < 0 ? "text-red-500" : ""} stroke-white dark:stroke-[#16161f]`} strokeWidth="2" />
+              className={`${hp.balance < 0 ? "text-red-500" : ""} stroke-white dark:stroke-surface`} strokeWidth="2" />
           </g>
         )}
       </svg>
 
       {hp && (
         <div className="absolute top-2 pointer-events-none z-10 px-3 py-2 rounded-xl text-xs shadow-lg
-                        bg-white dark:bg-[#1d1d29] border border-slate-100 dark:border-white/10 text-slate-700 dark:text-slate-200"
+                        bg-raised border border-slate-100 dark:border-white/10 text-slate-700 dark:text-slate-200"
           style={{ left: `${leftPct}%`, transform: `translateX(${leftPct > 60 ? "-105%" : "5%"})`, minWidth: 140 }}>
           <p className="text-slate-400 dark:text-slate-500">{longLabel(hp.date)}</p>
           <p className={`font-mono font-semibold text-sm ${hp.balance < 0 ? "text-red-500" : ""}`}>{fmt(hp.balance)}</p>
@@ -147,7 +147,7 @@ function Chart({ points, events }) {
 // ───────── page ─────────
 function Stat({ label, value, sub, tone }) {
   return (
-    <div className="bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-4">
+    <div className="bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-4">
       <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</p>
       <p className={`text-xl font-bold font-mono mt-1 ${tone || "text-slate-900 dark:text-white"}`}>{value}</p>
       {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
@@ -205,7 +205,7 @@ export default function ForecastPage() {
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Cash-flow forecast</h1>
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">Where your balance is heading, based on your recurring items and spending habits.</p>
           </div>
-          <div className="ml-auto flex rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[#16161f]">
+          <div className="ml-auto flex rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden bg-surface">
             {HORIZONS.map(h => (
               <button key={h} onClick={() => setDays(h)}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${days === h
@@ -243,7 +243,7 @@ export default function ForecastPage() {
             </div>
 
             {/* Chart */}
-            <div className="bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-4 mb-4">
+            <div className="bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-4 mb-4">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 text-xs text-slate-400 dark:text-slate-500">
                 <span className="font-semibold text-slate-600 dark:text-slate-300 text-sm">Projected balance</span>
                 <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" />Money coming in</span>
@@ -255,7 +255,7 @@ export default function ForecastPage() {
 
             <div className="grid lg:grid-cols-5 gap-4">
               {/* What-if */}
-              <div className="lg:col-span-2 bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-4 self-start">
+              <div className="lg:col-span-2 bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-4 self-start">
                 <h2 className="text-sm font-semibold text-slate-800 dark:text-white mb-1">Everyday spending</h2>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mb-3 leading-relaxed">
                   {data.confidence === "none"
@@ -286,7 +286,7 @@ export default function ForecastPage() {
               </div>
 
               {/* Upcoming */}
-              <div className="lg:col-span-3 bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-4">
+              <div className="lg:col-span-3 bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-4">
                 <div className="flex items-baseline justify-between mb-2">
                   <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Coming up</h2>
                   <p className="text-xs text-slate-400 dark:text-slate-500">

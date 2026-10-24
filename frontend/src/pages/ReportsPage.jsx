@@ -24,7 +24,7 @@ const dayLabel = s => {
 };
 
 // ───────── small pieces ─────────
-const card = "bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl p-4 break-inside-avoid print:border-slate-200";
+const card = "bg-surface border border-slate-100 dark:border-white/5 rounded-2xl p-4 break-inside-avoid print:border-slate-200";
 
 function Change({ pct, goodWhenDown }) {
   if (pct === null || pct === undefined) return <span className="text-slate-400 dark:text-slate-500">no data last month</span>;
@@ -137,7 +137,7 @@ export default function ReportsPage() {
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">A summary of your month that you can save as a PDF. <Link to="/reports/year" className="text-brand-500 hover:underline">Yearly report</Link></p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#16161f] overflow-hidden">
+            <div className="flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-surface overflow-hidden">
               <button onClick={() => setMonth(m => shiftMonth(m, -1))} aria-label="Previous month"
                 className="px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5">‹</button>
               <span className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 min-w-[140px] text-center">{monthLabel(month)}</span>

@@ -425,8 +425,8 @@ export default function TransactionsPage() {
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium"
-                          style={{ background: (t.category_color || "#6b675e") + "18", color: t.category_color || "#6b675e" }}>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.category_color || "#6b675e" }} aria-hidden="true" />
                           {t.category_name || "—"}
                         </span>
                       </td>
