@@ -228,7 +228,7 @@ export default function AIChatPage() {
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
                        bg-brand-500 hover:bg-brand-600 text-white
                        disabled:opacity-40 disabled:cursor-not-allowed
-                       active:scale-95 transition-all self-end shadow-lg shadow-brand-500/25">
+                       active:scale-95 transition-all self-end">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>

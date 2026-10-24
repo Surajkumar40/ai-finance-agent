@@ -15,10 +15,10 @@ const cardClass = "bg-surface border border-slate-100 dark:border-white/5 rounde
 const btnBase = "px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-w-[140px]";
 // idle = purple, nothing to save = quiet grey, just saved = green tick (goes back by itself)
 const btnClass = (state) => state === "saved"
-  ? `${btnBase} bg-emerald-500 text-white shadow-lg shadow-emerald-500/20`
+  ? `${btnBase} bg-emerald-500 text-white`
   : state === "idle"
     ? `${btnBase} bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-slate-500 cursor-not-allowed`
-    : `${btnBase} bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/25 disabled:opacity-60 disabled:cursor-not-allowed`;
+    : `${btnBase} bg-brand-500 hover:bg-brand-600 text-white disabled:opacity-60 disabled:cursor-not-allowed`;
 const ghostBtn = "px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-brand-400 hover:text-brand-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all";
 
 function Notice({ kind, children }) {

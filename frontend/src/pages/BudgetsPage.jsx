@@ -183,7 +183,7 @@ export default function BudgetsPage() {
             </div>
             <button onClick={() => openAdd()} disabled={!loaded}
               className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600
-                         disabled:opacity-60 active:scale-95 transition-all shadow-lg shadow-brand-500/25">
+                         disabled:opacity-60 active:scale-95 transition-all">
               + Set budget
             </button>
           </div>

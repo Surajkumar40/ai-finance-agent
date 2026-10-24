@@ -34,9 +34,9 @@ export default function SignupPage() {
         points={["Budgets with alerts before you overspend", "Savings goals with a projected finish date", "Share expenses with your household"]}
       />
 
-      <div className="relative flex flex-1 flex-col items-center justify-center px-6 py-12 lg:px-16">
-        <ThemeToggle />
-        <div className="w-full max-w-sm animate-slide-up">
+      <div className="flex min-w-0 flex-1 flex-col items-center px-6 py-5 lg:px-16">
+        <div className="flex w-full justify-end"><ThemeToggle /></div>
+        <div className="my-auto w-full max-w-sm animate-slide-up py-8">
           <div className="mb-8 lg:hidden"><Brand /></div>
 
           <h1 className="mb-1 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Create account</h1>

@@ -145,7 +145,7 @@ export default function ReportsPage() {
                 className="px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed">›</button>
             </div>
             <button onClick={download} disabled={!data}
-              className="px-4 py-2 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/25 disabled:opacity-50 transition-all">
+              className="px-4 py-2 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white disabled:opacity-50 transition-all">
               Download PDF
             </button>
           </div>

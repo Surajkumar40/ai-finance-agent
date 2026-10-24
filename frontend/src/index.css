@@ -1,55 +1,163 @@
-
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts are loaded from index.html (preconnect + stylesheet link), not with @import here, so they do not block rendering. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ───────────────────────── Design tokens ─────────────────────────
+   Colours are stored as "R G B" so Tailwind can add opacity (bg-brand-500/10).
+   Light = warm paper. Dark = warm charcoal (a designed theme, not the light one inverted).
+   Every text colour below was checked for at least 4.5:1 contrast on the surfaces it sits on. */
 @layer base {
+  :root {
+    color-scheme: light;
+
+    --canvas: 246 245 241;   /* page background */
+    --surface: 255 255 255;  /* cards */
+    --raised: 255 255 255;   /* dialogs and menus */
+    --line: 228 225 216;     /* borders and dividers */
+    --ink: 24 24 22;         /* body text */
+    --focus: 31 111 139;     /* focus ring and text selection */
+
+    /* neutrals (Tailwind "slate"). 400 to 600 are the greys used for text */
+    --n-50: 246 245 241;  --n-100: 238 236 230; --n-200: 226 223 214; --n-300: 201 197 185;
+    --n-400: 107 103 94;  --n-500: 87 83 75;    --n-600: 69 66 60;    --n-700: 52 50 45;
+    --n-800: 38 37 34;    --n-900: 24 24 22;
+
+    /* money colours: green (income), red (spending), amber (warning) */
+    --g-400: 11 122 85;   --g-500: 11 122 85;   --g-600: 9 106 73;    --g-700: 7 90 61;
+    --r-400: 194 54 43;   --r-500: 180 35 24;   --r-600: 159 29 20;   --r-700: 134 24 16;
+    --a-400: 161 92 7;    --a-500: 161 92 7;    --a-600: 138 78 6;    --a-700: 115 63 5;
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    --canvas: 20 20 19;
+    --surface: 28 28 26;
+    --raised: 36 36 33;
+    --line: 52 52 48;
+    --ink: 236 235 230;
+    --focus: 90 169 196;
+
+    --n-400: 170 166 155; --n-500: 147 143 132; --n-600: 139 135 122;
+
+    --g-400: 82 211 164;  --g-500: 60 199 150;  --g-600: 47 181 132;  --g-700: 36 160 114;
+    --r-400: 242 139 130; --r-500: 244 117 107; --r-600: 239 99 88;   --r-700: 232 92 82;
+    --a-400: 236 177 76;  --a-500: 224 162 58;  --a-600: 209 149 39;  --a-700: 190 130 28;
+  }
+
   * { box-sizing: border-box; }
 
   body {
-    @apply bg-slate-50 text-slate-900 font-sans antialiased;
-    @apply dark:bg-[#0d0d14] dark:text-slate-100;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    @apply bg-canvas text-slate-900 font-sans antialiased dark:text-slate-100;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  h1, h2, h3 { text-wrap: balance; }
+
+  /* Amounts line up in columns */
+  .font-mono { font-variant-numeric: tabular-nums; }
+
+  ::selection { background: rgb(var(--focus) / 0.25); }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { @apply bg-transparent; }
   ::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-700 rounded-full; }
-}
 
-@layer components {
-  .card {
-    @apply bg-white dark:bg-[#16161f] border border-slate-100 dark:border-white/5 rounded-2xl;
+  /* A visible ring for keyboard users on anything clickable. :where() keeps it easy to override. */
+  :where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid rgb(var(--focus));
+    outline-offset: 2px;
   }
-  .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-xl px-4 py-2 text-sm transition-all duration-150 active:scale-95;
-  }
-  .btn-ghost {
-    @apply bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 rounded-xl px-4 py-2 text-sm transition-all duration-150;
-  }
-}
+  :where(button:not(:disabled), [role="button"]) { cursor: pointer; }
 
-/* Dropdown (<select>) options: the popup list ignores the select's own colours,
-   so give it explicit readable colours in light AND dark mode */
-@layer base {
-  select { color-scheme: light; }
-  .dark select { color-scheme: dark; }
-
+  /* Dropdown (<select>) lists ignore the select's own colours, so give them explicit ones in both themes */
   select option,
   select optgroup {
-    background-color: #ffffff;
-    color: #0f172a;
-  }
-  .dark select option,
-  .dark select optgroup {
-    background-color: #16161f;
-    color: #f1f5f9;
+    background-color: rgb(var(--surface));
+    color: rgb(var(--ink));
   }
   select option:checked,
   select option:hover {
-    background-color: #7c5cfc;
+    background-color: #1f6f8b;
     color: #ffffff;
+  }
+}
+
+/* ───────────────────────── Shared building blocks ───────────────────────── */
+@layer components {
+  .card {
+    @apply bg-surface border border-line rounded-xl;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white
+           transition-colors duration-150 hover:bg-brand-600 active:translate-y-px
+           disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-surface px-4 py-2 text-sm font-medium text-slate-700
+           transition-colors duration-150 hover:bg-slate-50 active:translate-y-px
+           disabled:pointer-events-none disabled:opacity-50
+           dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-transparent px-3 py-2 text-sm text-slate-600
+           transition-colors duration-150 hover:bg-slate-100
+           disabled:pointer-events-none disabled:opacity-50
+           dark:text-slate-300 dark:hover:bg-white/5;
+  }
+  /* Fixed colours: white text stays readable on the same red in both themes */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-[#b42318] px-4 py-2 text-sm font-medium text-white
+           transition-colors duration-150 hover:bg-[#9f1d14] active:translate-y-px
+           disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-slate-200 bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400
+           transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20
+           disabled:opacity-60 dark:border-white/10 dark:text-slate-100;
+  }
+  .field-label {
+    @apply mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300;
+  }
+
+  .chip {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
+  }
+
+  /* Placeholder block shown while data loads */
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200/70 dark:bg-white/10;
+  }
+
+  /* Dialog: dark layer + panel. Used as <div class="modal-overlay"><div class="modal-panel" role="dialog" aria-modal="true">. */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 animate-overlay-in;
+  }
+  .modal-panel {
+    @apply w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-line bg-raised shadow-xl animate-modal-in;
+  }
+}
+
+/* ───────────────────────── Motion ───────────────────────── */
+
+/* Added to <html> for a quarter of a second when the theme is switched, so colours fade instead of snapping */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, fill 0.2s ease, stroke 0.2s ease !important;
+}
+
+/* People who ask their device for less motion get none */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -116,7 +116,7 @@ export default function SpendingInsights() {
                 {["daily", "cumulative"].map(m => (
                   <button key={m} onClick={() => setMode(m)}
                     className={`text-[11px] px-2.5 py-1 rounded-lg font-medium capitalize transition-all
-                      ${mode === m ? "bg-brand-500 text-white" : "text-slate-500 bg-slate-50 dark:bg-white/5 hover:text-slate-700"}`}>{m}</button>
+                      ${mode === m ? "bg-brand-500 text-white" : "text-slate-500 bg-slate-50 dark:bg-white/5 hover:text-slate-700 dark:hover:text-slate-200"}`}>{m}</button>
                 ))}
               </div>
               {data.totals.expense === 0 ? (

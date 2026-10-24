@@ -184,7 +184,7 @@ export default function ImportCSV({ transactions = [], categories = [], onDone }
                   </p>
                   <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,text/csv" onChange={handleFile} className="hidden" />
                   <button onClick={() => fileRef.current?.click()}
-                    className="mt-5 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all shadow-lg shadow-brand-500/25">
+                    className="mt-5 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all">
                     Choose CSV file
                   </button>
                   <div className="mt-4">

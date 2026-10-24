@@ -140,7 +140,7 @@ export default function RecurringPage() {
               Run due now
             </button>
             <button onClick={() => { setForm(EMPTY); setEditId(null); setError(""); setShowModal(true); }}
-              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all shadow-lg shadow-brand-500/25">
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all">
               + Add recurring
             </button>
           </div>
@@ -285,7 +285,7 @@ export default function RecurringPage() {
               <button onClick={() => setShowModal(false)}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">Cancel</button>
               <button onClick={save} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 active:scale-95 disabled:opacity-60 transition-all shadow-lg shadow-brand-500/20">
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 active:scale-95 disabled:opacity-60 transition-all">
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>

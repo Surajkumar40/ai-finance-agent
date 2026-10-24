@@ -257,7 +257,7 @@ export default function TransactionsPage() {
             </button>
             <button onClick={openAdd}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white
-                         bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all shadow-lg shadow-brand-500/25">
+                         bg-brand-500 hover:bg-brand-600 active:scale-95 transition-all">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
               Add Transaction
             </button>
@@ -578,7 +578,7 @@ export default function TransactionsPage() {
               <button onClick={handleSubmit} disabled={loading}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white
                            bg-brand-500 hover:bg-brand-600 active:scale-95
-                           disabled:opacity-60 transition-all shadow-lg shadow-brand-500/20">
+                           disabled:opacity-60 transition-all">
                 {loading ? "Saving…" : editId ? "Update" : "Add Transaction"}
               </button>
             </div>

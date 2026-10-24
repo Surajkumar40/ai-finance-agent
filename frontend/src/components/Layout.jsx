@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import NotificationBell from "./NotificationBell";
@@ -39,6 +39,7 @@ const navGroups = [
     { to: "/recurring", label: "Recurring", icon: icons.recurring },
     { to: "/goals", label: "Goals", icon: icons.goals },
     { to: "/categories", label: "Categories", icon: icons.categories },
+    { to: "/shared", label: "Shared", icon: icons.shared },
   ]},
   { label: "Insight", items: [
     { to: "/forecast", label: "Forecast", icon: icons.forecast },
@@ -47,13 +48,10 @@ const navGroups = [
     { to: "/reports", label: "Reports", icon: icons.reports },
     { to: "/ai", label: "AI assistant", icon: icons.ai },
   ]},
-  { label: "Household", items: [
-    { to: "/shared", label: "Shared", icon: icons.shared },
-  ]},
-  { label: "Account", items: [
-    { to: "/profile", label: "Profile", icon: icons.profile },
-  ]},
 ];
+
+// Set once the first page of this visit has been shown
+let pageShown = false;
 
 // True while the screen is wide enough for the permanent sidebar (Tailwind's lg breakpoint).
 function useIsDesktop() {
@@ -75,7 +73,6 @@ export default function Layout({ children }) {
   const { logout, user, token } = useAuth();
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
-  const location = useLocation();
   const isDesktop = useIsDesktop();
   useEffect(() => { syncCurrency(token); }, [token]); // the saved display currency, read once per sign-in
   const [menuOpen, setMenuOpen] = useState(false); // phone: the menu slides in over the page
@@ -117,13 +114,15 @@ export default function Layout({ children }) {
     return () => { document.body.style.overflow = previous; document.removeEventListener("keydown", onKey); };
   }, [drawerOpen, closeMenu]);
 
-  // Going to another page: close the drawer and move focus to the new page's content (screen readers announce it).
-  const firstRender = useRef(true);
+  // Each page renders its own Layout, so this runs once per page visit. After the first page of a visit, move focus to the
+  // new page's content so keyboard and screen reader users start at the top of it. (The timer keeps dev double-runs harmless.)
   useEffect(() => {
-    if (firstRender.current) { firstRender.current = false; return; }
-    setMenuOpen(false);
-    mainRef.current?.focus({ preventScroll: true });
-  }, [location.pathname]);
+    const t = setTimeout(() => {
+      if (pageShown) mainRef.current?.focus({ preventScroll: true });
+      pageShown = true;
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   // When the drawer is shut on a phone it is off-screen, so keep keyboard and screen reader users out of it.
   const hiddenDrawer = !isDesktop && !menuOpen;
@@ -221,11 +220,14 @@ export default function Layout({ children }) {
             {dark ? "Light mode" : "Dark mode"}
           </button>
 
-          <div className="flex items-center gap-2.5 px-3 py-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10 font-mono text-[11px] font-medium text-slate-600">
-              {initials}
-            </div>
-            <span className="flex-1 truncate text-xs text-slate-600">{user?.name ?? "User"}</span>
+          <div className="flex items-center gap-1">
+            <NavLink to="/profile" aria-label="Profile"
+              className={({ isActive }) => `flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2 transition-colors ${isActive ? "bg-slate-100 dark:bg-white/10" : "hover:bg-slate-100/70 dark:hover:bg-white/5"}`}>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-white/10 font-mono text-[11px] font-medium text-slate-600">
+                {initials}
+              </div>
+              <span className="flex-1 truncate text-xs text-slate-600">{user?.name ?? "User"}</span>
+            </NavLink>
             <NotificationBell />
           </div>
 

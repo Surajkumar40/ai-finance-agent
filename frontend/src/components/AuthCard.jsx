@@ -13,7 +13,7 @@ export function ThemeToggle() {
   const { dark, toggle } = useTheme();
   return (
     <button onClick={toggle} aria-pressed={dark} aria-label="Dark mode"
-      className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-slate-500 transition-colors hover:text-slate-800 dark:hover:text-slate-100">
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-slate-500 transition-colors hover:text-slate-800 dark:hover:text-slate-100">
       {dark ? <Sun /> : <Moon />}
     </button>
   );
@@ -58,9 +58,9 @@ export function BrandPanel({ title, text, points }) {
 // Small centred card used by the forgot-password and reset-password pages
 export default function AuthCard({ title, subtitle, children }) {
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-canvas px-6 py-12">
-      <ThemeToggle />
-      <div className="w-full max-w-sm animate-slide-up">
+    <div className="flex min-h-screen flex-col items-center bg-canvas px-6 py-5">
+      <div className="flex w-full justify-end"><ThemeToggle /></div>
+      <div className="my-auto w-full max-w-sm animate-slide-up py-8">
         <Link to="/login" className="mb-8 inline-block"><Brand /></Link>
         <h1 className="mb-1 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{title}</h1>
         {subtitle && <p className="mb-7 text-sm text-slate-500">{subtitle}</p>}
