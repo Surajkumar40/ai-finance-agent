@@ -26,7 +26,7 @@ A full-stack personal finance tracker with an AI assistant. Track spending, set 
 ## What it does
 
 **Money tracking**
-- Add, edit, duplicate and delete transactions, with search, filters (type, date range, category), sorting and paging.
+- Add, edit, duplicate and delete transactions, with search, filters (type, category, and a date range: this month, last month, last 90 days, this year or your own start and end dates), sorting and paging.
 - Select many at once to delete or re-categorise them, with a one-click **Undo** after a delete.
 - Import and export CSV. Scan a receipt photo to fill in the form. Add a transaction by speaking.
 - Custom categories with their own colours and icons.
@@ -43,7 +43,7 @@ A full-stack personal finance tracker with an AI assistant. Track spending, set 
 
 **Insight**
 - Dashboard with bills coming up, goals, net worth, spending split and a monthly overview.
-- Monthly and yearly reports (download as PDF) written in plain language: what changed, what went over budget, how many no-spend days.
+- Monthly and yearly reports (download as PDF) written in plain language: what changed, what went over budget, how many no-spend days, and which weekday you spend the most on.
 - Financial health score and an AI chat assistant that can look up your spending, add transactions and set budgets for you.
 
 **Everything else**
@@ -86,7 +86,7 @@ A full-stack personal finance tracker with an AI assistant. Track spending, set 
 - **Dates that stay correct in any timezone.** Dates travel as plain `YYYY-MM-DD` text and are never converted through a timestamp, so a transaction on the 1st stays in its month for users anywhere in the world.
 - **Logic kept apart from the database.** Recurring-payment detection, budget suggestions, goal projections and expense splitting are plain functions with no database calls, which makes them easy to test and reason about.
 - **Demo mode.** `POST /api/demo` creates a temporary account with realistic data, limits how many can be created per hour, and removes them after a day.
-- **Tested on every push.** 106 automated tests run on GitHub Actions (see Tests below), and two of them guard the points that matter most: dates never shifting a day, and one person never seeing another's data.
+- **Tested on every push.** 127 automated tests run on GitHub Actions (see Tests below), and two of them guard the points that matter most: dates never shifting a day, and one person never seeing another's data.
 - **Trade-off.** Rate limits are held in memory, which is right for a single server. Running several API instances would need a shared store such as Redis.
 
 ## Run it on your computer
@@ -125,10 +125,10 @@ Open http://localhost:5173 and use **Try the demo**, or sign up.
 
 ### Tests
 
-106 automated tests run on every push (GitHub Actions) next to a lint and build check of the web app:
+127 automated tests run on every push (GitHub Actions) next to a lint and build check of the web app:
 
 - **18 unit tests** for the business logic: next due dates, splitting expenses, budget suggestions, goal projections and spotting repeating payments.
-- **75 web app tests** (Vitest and Testing Library) for CSV export and import, rupee formatting, voice-entry parsing, the what-if calculator, the light/dark theme and the sign-in form. They also cover the mobile menu behaviour. A date test runs in a different time zone on purpose, to catch dates shifting a day.
+- **96 web app tests** (Vitest and Testing Library) for CSV export and import, rupee formatting, voice-entry parsing, the what-if calculator, custom date ranges, the weekday spending totals, the light/dark theme and the sign-in form. They also cover the mobile menu behaviour. A date test runs in a different time zone on purpose, to catch dates shifting a day.
 - **13 end-to-end tests** that start the real API against a real MySQL database and check sign-in, privacy between users, transactions, bulk delete and undo, budgets, goals, recurring items, the demo account and data export.
 
 ```bash
