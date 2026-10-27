@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { dayOf, inRange, rangeFor } from "../utils/dateRange";
 import Layout from "../components/Layout";
 import api from "../api/axios";
 import { downloadCSV } from "../utils/csv";
@@ -35,7 +36,7 @@ const MAX_BULK = 500; // the most the server changes in one go
 const PAGE = 50; // rows drawn at a time, so a long history does not slow the page down
 const RANGES = [
   { id: "all", label: "All time" }, { id: "month", label: "This month" }, { id: "last", label: "Last month" },
-  { id: "90", label: "Last 90 days" }, { id: "year", label: "This year" },
+  { id: "90", label: "Last 90 days" }, { id: "year", label: "This year" }, { id: "custom", label: "Custom dates…" },
 ];
 const SORTS = [
   { id: "new", label: "Newest first" }, { id: "old", label: "Oldest first" },
@@ -49,18 +50,7 @@ const bySort = id => (a, b) => {
   if (id === "low") return parseFloat(a.amount) - parseFloat(b.amount) || byDate;
   return byDate;
 };
-const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const dayOf = v => String(v).slice(0, 10);
 const showDate = v => { const [y, m, d] = dayOf(v).split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("en-IN"); }; // not new Date(text): that shifts the day west of UTC
-// [start, end) as YYYY-MM-DD text, in the visitor's own calendar
-function rangeStart(id) {
-  const n = new Date(), y = n.getFullYear(), m = n.getMonth();
-  if (id === "month") return { start: ymdLocal(new Date(y, m, 1)), end: ymdLocal(new Date(y, m + 1, 1)) };
-  if (id === "last") return { start: ymdLocal(new Date(y, m - 1, 1)), end: ymdLocal(new Date(y, m, 1)) };
-  if (id === "90") return { start: ymdLocal(new Date(y, m, n.getDate() - 90)), end: ymdLocal(new Date(y, m, n.getDate() + 1)) };
-  if (id === "year") return { start: `${y}-01-01`, end: `${y + 1}-01-01` };
-  return null;
-}
 
 export default function TransactionsPage() {
   useCurrency();
@@ -74,6 +64,8 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [range, setRange] = useState("all");
+  const [dateFrom, setDateFrom] = useState(""); // custom range, YYYY-MM-DD
+  const [dateTo, setDateTo] = useState("");
   const [catFilter, setCatFilter] = useState("all"); // "all" | "none" (no category) | a category id
   const [sortBy, setSortBy] = useState("new");
   const [limit, setLimit] = useState(PAGE); // rows shown; "Show more" adds another page
@@ -190,17 +182,17 @@ export default function TransactionsPage() {
 
   const fmt = (n) => money(n, 0);
 
-  const from = rangeStart(range);
+  const from = rangeFor(range, new Date(), { from: dateFrom, to: dateTo });
   const q = search.trim().toLowerCase();
   const filtered = transactions
     .filter(t => filter === "all" || t.type === filter)
-    .filter(t => !from || dayOf(t.date) >= from.start && dayOf(t.date) < from.end)
+    .filter(t => inRange(t.date, from))
     .filter(t => catFilter === "all" || (catFilter === "none" ? !t.category_id : String(t.category_id) === catFilter))
     .filter(t => !q || t.title?.toLowerCase().includes(q) || t.category_name?.toLowerCase().includes(q) || t.note?.toLowerCase().includes(q))
     .sort(bySort(sortBy));
   const shown = filtered.slice(0, limit);
   const sumOf = type => filtered.filter(t => t.type === type).reduce((s, t) => s + parseFloat(t.amount), 0);
-  const isFiltered = filter !== "all" || range !== "all" || catFilter !== "all" || q !== "";
+  const isFiltered = filter !== "all" || (range !== "all" && !(range === "custom" && !from)) || catFilter !== "all" || q !== "";
 
   const pickedIds = transactions.filter(t => selected.has(t.id)).map(t => t.id); // ticks of rows that still exist
   const pickedCount = pickedIds.length;
@@ -324,8 +316,22 @@ export default function TransactionsPage() {
             className="px-3 py-2 rounded-lg text-xs font-medium bg-surface border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-brand-400">
             {SORTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
+          {range === "custom" && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Custom date range">
+              <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">From
+                <input type="date" value={dateFrom} max={dateTo || undefined} onChange={e => { setDateFrom(e.target.value); resetView(); }}
+                  className="px-2.5 py-2 rounded-lg text-xs bg-surface border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-400" />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">To
+                <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => { setDateTo(e.target.value); resetView(); }}
+                  className="px-2.5 py-2 rounded-lg text-xs bg-surface border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-400" />
+              </label>
+              {from?.error && <p role="alert" className="text-xs text-red-500">{from.error}</p>}
+              {!from && <p className="text-xs text-slate-400 dark:text-slate-500">Pick a start, an end, or both.</p>}
+            </div>
+          )}
           {isFiltered && (
-            <button onClick={() => { setSearch(""); setFilter("all"); setRange("all"); setCatFilter("all"); resetView(); }}
+            <button onClick={() => { setSearch(""); setFilter("all"); setRange("all"); setDateFrom(""); setDateTo(""); setCatFilter("all"); resetView(); }}
               className="px-3 py-2 rounded-xl text-xs font-medium text-brand-500 hover:text-brand-600">Clear filters</button>
           )}
         </div>

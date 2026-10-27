@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import { fmt as money, useCurrency } from "../utils/currency";
+import { busiestWeekday, weekdaySpend, WEEKDAYS, WEEKDAY_NAMES } from "../utils/weekday";
 
 const fmt = (n) => money(n, 0);
 const pad = n => String(n).padStart(2, "0");
@@ -75,6 +76,42 @@ function DailyChart({ daily }) {
       })}
       <text x={W - R} y={T + 2} textAnchor="end" fontSize="11" className="fill-slate-400 dark:fill-slate-500">Highest day {fmt(max)}</text>
     </svg>
+  );
+}
+
+function WeekdayChart({ daily }) {
+  const rows = weekdaySpend(daily);
+  const top = busiestWeekday(rows);
+  const W = 800, H = 150, L = 8, R = 8, T = 20, B = 22;
+  const max = Math.max(1, ...rows.map(r => r.avg));
+  const slot = (W - L - R) / rows.length;
+  const bw = Math.min(64, slot - 16);
+  return (
+    <>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block text-brand-500" role="img"
+        aria-label={`Average spending by day of the week${top ? `, highest on ${top.label}` : ""}`}>
+        <line x1={L} x2={W - R} y1={H - B} y2={H - B} className="stroke-slate-200 dark:stroke-white/10" strokeWidth="1" />
+        {rows.map((r, i) => {
+          const h = r.avg > 0 ? Math.max(2, (r.avg / max) * (H - T - B)) : 0;
+          const x = L + i * slot + (slot - bw) / 2;
+          const isTop = top && r.label === top.label;
+          return (
+            <g key={r.label}>
+              {h > 0 && (
+                <rect x={x} y={H - B - h} width={bw} height={h} rx="3" fill="currentColor" opacity={isTop ? 1 : 0.45}>
+                  <title>{`${r.label}: ${fmt(r.avg)} a day on average (${fmt(r.total)} over ${r.count} day${r.count === 1 ? "" : "s"})`}</title>
+                </rect>
+              )}
+              <text x={x + bw / 2} y={H - 6} textAnchor="middle" fontSize="11" className="fill-slate-400 dark:fill-slate-500">{r.label}</text>
+              {isTop && <text x={x + bw / 2} y={H - B - h - 4} textAnchor="middle" fontSize="11" className="fill-slate-600 dark:fill-slate-300">{fmt(r.avg)}</text>}
+            </g>
+          );
+        })}
+      </svg>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+        {top ? `You spend the most on ${WEEKDAY_NAMES[WEEKDAYS.indexOf(top.label)]}s, about ${fmt(top.avg)} a day.` : "No spending to show."} Average per day, so months with five of one weekday stay fair.
+      </p>
+    </>
   );
 }
 
@@ -217,6 +254,12 @@ export default function ReportsPage() {
             <div className={card}>
               <h3 className="text-sm font-semibold text-slate-800 dark:text-white mb-2">Spending day by day</h3>
               <div className="overflow-x-auto -mx-1 px-1"><div className="min-w-[560px]"><DailyChart daily={data.daily} /></div></div>
+            </div>
+
+            {/* Weekday */}
+            <div className={card}>
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-white mb-2">Which days you spend most</h3>
+              <WeekdayChart daily={data.daily} />
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
